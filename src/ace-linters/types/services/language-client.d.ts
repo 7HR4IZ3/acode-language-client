@@ -1,0 +1,37 @@
+import * as lsp from "vscode-languageserver-protocol";
+import { LanguageClientConfig, LanguageService, ServiceOptions } from "../types/language-service";
+import { BaseService } from "./base-service";
+export declare class LanguageClient extends BaseService implements LanguageService {
+    $service: any;
+    private isConnected;
+    private isInitialized;
+    private readonly socket;
+    private connection;
+    private requestsQueue;
+    serviceData: LanguageClientConfig;
+    $diagnostics: lsp.Diagnostic[];
+    clientCapabilities: lsp.ClientCapabilities;
+    ctx: any;
+    constructor(serviceData: LanguageClientConfig, ctx: any);
+    setDefaultFeaturesState(serviceFeatures: any): any;
+    private $connectSocket;
+    private $connectWorker;
+    private $connect;
+    showLog(params: lsp.ShowMessageParams): void;
+    showTrace(params: lsp.LogTraceParams): void;
+    addDocument(document: lsp.TextDocumentItem): void;
+    enqueueIfNotConnected(callback: () => void): void;
+    removeDocument(document: lsp.TextDocumentIdentifier): void;
+    dispose(): void;
+    sendInitialize(initializationOptions: any): void;
+    applyDeltas(identifier: lsp.VersionedTextDocumentIdentifier, deltas: lsp.TextDocumentContentChangeEvent[]): void;
+    setValue(identifier: lsp.VersionedTextDocumentIdentifier, value: string): void;
+    doHover(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.Hover | null>;
+    doComplete(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.CompletionItem[] | lsp.CompletionList | null>;
+    doResolve(item: lsp.CompletionItem): Promise<lsp.CompletionItem | null>;
+    doValidation(document: lsp.TextDocumentIdentifier): Promise<lsp.Diagnostic[]>;
+    format(document: lsp.TextDocumentIdentifier, range: lsp.Range, format: lsp.FormattingOptions): Promise<lsp.TextEdit[]>;
+    setGlobalOptions(options: ServiceOptions): void;
+    findDocumentHighlights(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.DocumentHighlight[]>;
+    provideSignatureHelp(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.SignatureHelp | null>;
+}

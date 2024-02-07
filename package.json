@@ -1,0 +1,63 @@
+{
+  "name": "acode-plugin",
+  "version": "1.0.2",
+  "description": "Template for Acode plugin",
+  "main": "dist/main.js",
+  "repository": "https://github.com/deadlyjack/acode-plugin.git",
+  "author": "Ajit <me@ajitkumar.dev>",
+  "license": "MIT",
+  "dependencies": {
+    "@xml-tools/ast": "^5.0.5",
+    "@xml-tools/constraints": "^1.1.1",
+    "@xml-tools/parser": "^1.0.11",
+    "@xml-tools/simple-schema": "^3.0.5",
+    "ace-code": "^1.32.3",
+    "acorn": "^8.11.3",
+    "express": "^4.18.2",
+    "express-ws": "^5.0.2",
+    "html-tag-js": "^1.1.22",
+    "htmlhint": "^1.1.4",
+    "luaparse": "latest",
+    "showdown": "latest",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "typescript-language-server": "^4.2.0",
+    "vls": "^0.8.5",
+    "vscode-css-languageservice": "^6.2.6",
+    "vscode-html-languageservice": "^5.0.6",
+    "vscode-json-languageservice": "^5.3.5",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-protocol": "^3.17.3",
+    "vscode-languageserver-textdocument": "^1.0.8",
+    "vscode-languageserver-types": "^3.17.3",
+    "vscode-ws-jsonrpc": "^2.0.1",
+    "vue": "^3.4.5",
+    "websocket": "^1.0.34",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.18.10",
+    "@babel/core": "^7.18.13",
+    "@babel/plugin-transform-runtime": "^7.19.6",
+    "@babel/preset-env": "^7.18.10",
+    "babel-loader": "^9.1.0",
+    "jszip": "^3.10.1",
+    "live-server": "^1.1.0",
+    "webpack": "^5.76.0",
+    "webpack-cli": "^5.0.0"
+  },
+  "scripts": {
+    "build": "webpack",
+    "watch": "webpack --watch",
+    "build-release": "webpack --mode production",
+    "start-dev": "node .vscode/start-dev"
+  },
+  "browserslist": [
+    "> 0.25%, not dead"
+  ],
+  "resolutions": {
+    "terser": ">=5.14.2 ",
+    "glob-parent": ">=5.1.2"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "acode.language.client",
+  "name": "Acode Language Client",
+  "main": "main.js",
+  "version": "1.0.0",
+  "readme": "readme.md",
+  "icon": "icon.png",
+  "files": [],
+  "minVersionCode" : 290,
+  "price": 0,
+  "author": {
+    "name": "Thraize",
+    "email": "gamerxville@gmail.com",
+    "github": "7HR4IZ3",
+    "url": "http://github.com/7HR4IZ3/acode-language-client"
+  }
+}
