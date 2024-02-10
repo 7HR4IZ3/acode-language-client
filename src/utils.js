@@ -9,17 +9,23 @@ export class ReconnectingWebSocket extends EventTarget {
     protocols,
     autoConnect = false,
     autoReconnect = true,
-    delay = 1000
+    delay = 1000,
+    autoClose = 300000
   ) {
     super();
 
     this.url = url;
     this.protocols = protocols;
     this.autoReconnect = autoReconnect;
+    this.autoClose = autoClose;
     this.delay = delay; // Reconnect delay in milliseconds
     this.connection = null;
     this.eventListeners = {};
     this.sendQueue = new Array();
+
+    this.$closeTimeout = null;
+    this.$retries = 0;
+    this.$maxRetries = 20;
 
     autoConnect && this.connect();
   }
@@ -32,8 +38,10 @@ export class ReconnectingWebSocket extends EventTarget {
   }
 
   connect(retry = true) {
+    this.autoReconnect = true;
     if (this.readyState !== WebSocket.CLOSED) return;
     try {
+      this.$retries += 1;
       this.connection = new WebSocket(this.url, this.protocols);
 
       this.connection.onopen = event => {
@@ -45,6 +53,7 @@ export class ReconnectingWebSocket extends EventTarget {
           this.sendQueue = [];
           newQueue.map(data => this.send(data));
         }
+        this.$retries = 0;
       };
 
       this.connection.onmessage = event => {
@@ -57,7 +66,7 @@ export class ReconnectingWebSocket extends EventTarget {
       };
 
       this.connection.onclose = event => {
-        if (this.autoReconnect) {
+        if (this.autoReconnect && this.$retries < this.$maxRetries) {
           setTimeout(() => this.connect(), this.delay);
         } else {
           this.dispatchEvent(
@@ -75,6 +84,10 @@ export class ReconnectingWebSocket extends EventTarget {
         this.dispatchEvent(new ErrorEvent("error"));
         this.onerror?.(error);
       };
+
+      if (autoClose && autoClose > 0) {
+        this.$closeTimeout = setTimeout(() => this.close(), this.autoClose);
+      }
     } catch {
       if (retry && this.autoReconnect) {
         setTimeout(() => this.connect(), this.delay);
@@ -102,12 +115,25 @@ export class ReconnectingWebSocket extends EventTarget {
       this.sendQueue.push(data);
       this.connect();
     }
+
+    if (this.$closeTimeout) {
+      clearTimeout(this.$closeTimeout);
+      this.$closeTimeout = setTimeout(() => this.close(), this.autoClose);
+    }
   }
 
   close() {
     this.autoReconnect = false;
     if (this.connection) {
       this.connection.close();
+
+      let event = new CloseEvent("close", {
+        reason: "Server disconnected.",
+        code: 1000,
+        wasClean: true
+      });
+      this.dispatchEvent(event);
+      this.onclose?.(event);
     }
   }
 }
@@ -186,9 +212,20 @@ export function unFormatUrl(fileUrl) {
   } else if (path.startsWith("sdcard")) {
     let sdcardPrefix =
       "content://com.android.externalstorage.documents/tree/primary%3A";
+    let relPath = path.substr("sdcard/".length);
+
+    let sourcesList = JSON.parse(localStorage.storageList || "[]");
+    for (let source of sourcesList) {
+      if (source.uri.startsWith(sdcardPrefix)) {
+        let raw = decodeURIComponent(source.uri.substr(sdcardPrefix.length));
+        if (relPath.startsWith(raw)) {
+          return source.uri + "::primary:" + relPath;
+        }
+      }
+    }
 
     // Extract the folder name after sdcard
-    let folderName = path.substr("sdcard/".length).split("/")[0];
+    let folderName = relPath.split("/")[0];
     // Add the folder name and merge the rest
     let sdcardPath =
       sdcardPrefix + folderName + "::primary:" + path.substr("sdcard/".length);
@@ -197,7 +234,6 @@ export function unFormatUrl(fileUrl) {
     return fileUrl;
   }
 }
-
 export function getFolderName(sessionId) {
   if (window.acode) {
     let file =
@@ -234,7 +270,6 @@ function stripHeaders(data) {
   return data.toString().split("\r\n\r\n")[1];
 }
 
-
 async function runAcodeTerminal(command, onmessage) {
   let terminal = acode.require("acode.terminal");
   // console.log("0:", acode.require("acode.terminal"));
@@ -262,9 +297,11 @@ export function commandAsWorker(command) {
     backend = await runAcodeTerminal(command, message => {
       if (!message) return;
       console.log("[Received]", message);
-      wrapper.onmessage?.(new MessageEvent("message", {
-        data: stripHeaders(message)
-      }));
+      wrapper.onmessage?.(
+        new MessageEvent("message", {
+          data: stripHeaders(message)
+        })
+      );
     });
   };
 
@@ -279,4 +316,8 @@ export function commandAsWorker(command) {
     }
   };
   return wrapper;
+}
+
+export function showToast(message) {
+  acode.require("toast")(message);
 }

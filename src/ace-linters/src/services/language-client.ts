@@ -12,13 +12,13 @@ import {
 } from "../types/language-service";
 import { BaseService } from "./base-service";
 import { MessageType } from "../message-types";
-import { commandAsWorker } from "../../../utils";
+import { commandAsWorker, showToast } from "../../../utils";
 
 export class LanguageClient extends BaseService implements LanguageService {
   $service;
+  socket: WebSocket;
   private isConnected = false;
   private isInitialized = false;
-  private readonly socket: WebSocket;
   private connection: lsp.ProtocolConnection;
   private requestsQueue: Function[] = [];
   serviceData: LanguageClientConfig;
@@ -412,8 +412,10 @@ export class LanguageClient extends BaseService implements LanguageService {
       rootUri: rootUri || "", //TODO: this.documentInfo.rootUri
       workspaceFolders: folders,
     };
+    
+    let mode = this.serviceData.modes.split("|")[0];
 
-    console.log("Initializing...");
+    showToast("Initializing " + mode + " Language Server...");
 
     this.connection
       .sendRequest("initialize", message)
@@ -422,7 +424,7 @@ export class LanguageClient extends BaseService implements LanguageService {
         this.serviceCapabilities =
           params.capabilities as lsp.ServerCapabilities;
 
-        console.log("Initialized...");
+        showToast("Initialized " + mode + " Language Server.");
 
         this.connection.sendNotification("initialized", {}).then(() => {
           this.connection.sendNotification("workspace/didChangeConfiguration", {

@@ -54,17 +54,9 @@ export declare class JavascriptService extends BaseService<JavascriptServiceOpti
         "no-shadow-restricted-names": number;
         "no-new-require": number;
     };
-    serviceCapabilities: {
-        diagnosticProvider: {
-            interFileDependencies: boolean;
-            workspaceDiagnostics: boolean;
-        };
-    };
     constructor(mode: string);
     get config(): {
         rules: {
-            [rule: string]: any;
-        } | {
             "handle-callback-err": number;
             "no-debugger": number;
             "no-undef": number;
@@ -93,10 +85,10 @@ export declare class JavascriptService extends BaseService<JavascriptServiceOpti
             "no-console": number;
             "no-shadow-restricted-names": number;
             "no-new-require": number;
+        } | {
+            [rule: string]: any;
         };
         env: {
-            [name: string]: boolean;
-        } | {
             browser: boolean;
             amd: boolean;
             builtin: boolean;
@@ -106,13 +98,13 @@ export declare class JavascriptService extends BaseService<JavascriptServiceOpti
             es6: boolean;
             jquery: boolean;
             meteor: boolean;
+        } | {
+            [name: string]: boolean;
         };
         globals: {
             [name: string]: boolean | "off" | "readonly" | "readable" | "writable" | "writeable";
         };
         parserOptions: {
-            [option: string]: any;
-        } | {
             ecmaFeatures: {
                 globalReturn: boolean;
                 jsx: boolean;
@@ -121,6 +113,8 @@ export declare class JavascriptService extends BaseService<JavascriptServiceOpti
             allowImportExportEverywhere: boolean;
             allowAwaitOutsideFunction: boolean;
             ecmaVersion: number;
+        } | {
+            [option: string]: any;
         };
     };
     doValidation(document: lsp.TextDocumentIdentifier): Promise<lsp.Diagnostic[]>;

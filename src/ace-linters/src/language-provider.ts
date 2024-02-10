@@ -143,6 +143,7 @@ export class LanguageProvider {
       );
   };
 
+
   private $getSessionLanguageProvider(
     session: Ace.EditSession
   ): SessionLanguageProvider {
@@ -449,17 +450,17 @@ export class LanguageProvider {
       },
       id: "lspCompleters",
     };
-    if (
-      this.options.functionality.completion &&
-      this.options.functionality.completion.overwriteCompleters
-    ) {
-      editor.completers = [completer];
-    } else {
-      if (!editor.completers) {
-        editor.completers = [];
-      }
-      editor.completers.push(completer);
+    // if (
+    //   this.options.functionality.completion &&
+    //   this.options.functionality.completion.overwriteCompleters
+    // ) {
+    //   editor.completers = [completer];
+    // } else {
+    // }
+    if (!editor.completers) {
+      editor.completers = [];
     }
+    editor.completers.push(completer);
   }
 
   dispose() {

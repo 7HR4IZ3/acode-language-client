@@ -1,5 +1,10 @@
 import plugin from "../plugin.json";
-import { ReconnectingWebSocket, formatUrl, unFormatUrl } from "./utils.js";
+import {
+  ReconnectingWebSocket,
+  formatUrl,
+  unFormatUrl,
+  getFolderName
+} from "./utils.js";
 
 import * as converters from "./ace-linters/src/type-converters/lsp-converters";
 import {
@@ -17,8 +22,7 @@ import { LanguageClient } from "./ace-linters/src/services/language-client.ts";
 
 /** @type {EditorManager} */
 let { editor } = editorManager;
-const LINTERS = ["pylint", "pyflakes", "mypy"];
-
+// const LINTERS = ["pylint", "pyflakes", "mypy"];
 
 let defaultServices = {};
 
@@ -105,7 +109,7 @@ export class AcodeLanguageServerPlugin {
           background: false,
           args: [
             "/sdcard/Programming/Javascript/Acode/" +
-            "acode-language-servers/server/server.mjs"
+              "acode-language-servers/server/server.mjs"
           ]
         })
         .then(console.log)
@@ -127,11 +131,9 @@ export class AcodeLanguageServerPlugin {
       functionality: {
         hover: this.settings.hover,
         format: this.settings.format,
-        completion: this.settings.completion
-          ? {
-              overwriteCompleters: false
-            }
-          : false,
+        completion: {
+          overwriteCompleters: false
+        },
         completionResolve: this.settings.completionResolve
       }
     };
@@ -202,65 +204,102 @@ export class AcodeLanguageServerPlugin {
       workspaceFolders: () => this.#getFolders()
     });
 
-    this.$manager.registerServer("python", {
-      modes: "python",
-      type: "socket",
+    this.$manager.registerService("javascript", {
+      features: { signatureHelp: false, documentHighlight: false },
+      module: () =>
+        import("./ace-linters/src/services/javascript/javascript-service.ts"),
       rootUri: () => this.#getRootUri(),
-      workspaceFolders: () => this.#getFolders(),
-      module: () => import("./ace-linters/src/services/language-client.ts"),
-      socket: new ReconnectingWebSocket(this.settings.url + "server/python")
-      // socket: new ReconnectingWebSocket("ws://localhost:3031"),
+      className: "JavascriptService",
+      modes: "javascript",
+      workspaceFolders: () => this.#getFolders()
     });
 
-    this.$manager.registerServer("cpp", {
-      modes: "c_cpp",
-      type: "socket",
+    this.$manager.registerService("yaml", {
+      features: { signatureHelp: false, documentHighlight: false },
+      module: () => import("./ace-linters/src/services/yaml/yaml-service.ts"),
       rootUri: () => this.#getRootUri(),
-      workspaceFolders: () => this.#getFolders(),
-      module: () => import("./ace-linters/src/services/language-client.ts"),
-      socket: new ReconnectingWebSocket(this.settings.url + "server/cpp")
+      className: "YamlService",
+      modes: "yaml",
+      workspaceFolders: () => this.#getFolders()
     });
 
-    this.$manager.registerServer("vue", {
-      modes: "html",
-      type: "socket",
+    this.$manager.registerService("lua", {
+      features: { signatureHelp: false, documentHighlight: false },
+      module: () => import("./ace-linters/src/services/lua/lua-service.ts"),
       rootUri: () => this.#getRootUri(),
-      workspaceFolders: () => this.#getFolders(),
-      initializationOptions: { cleanPendingValidation: true },
-      module: () => import("./ace-linters/src/services/language-client.ts"),
-      socket: new ReconnectingWebSocket(this.settings.url + "server/vue")
+      className: "LuaService",
+      modes: "lua",
+      workspaceFolders: () => this.#getFolders()
     });
 
-    this.$manager.registerServer("java", {
-      modes: "java",
-      type: "socket",
+    this.$manager.registerService("php", {
+      features: { signatureHelp: false, documentHighlight: false },
+      module: () => import("./ace-linters/src/services/php/php-service.ts"),
       rootUri: () => this.#getRootUri(),
-      workspaceFolders: () => this.#getFolders(),
-      module: () => import("./ace-linters/src/services/language-client.ts"),
-      socket: new ReconnectingWebSocket(this.settings.url + "server/java")
+      className: "PhpService",
+      modes: "php",
+      workspaceFolders: () => this.#getFolders()
     });
 
-    this.$manager.registerServer("typescript", {
-      type: "socket",
-      modes: "typescript|javascript|tsx|jsx",
-      rootUri: () => this.#getRootUri(),
-      workspaceFolders: () => this.#getFolders(),
-      module: () => import("./ace-linters/src/services/language-client.ts"),
-      initializationOptions: { cancellationPipeName: "typescript" },
-      socket: new ReconnectingWebSocket(this.settings.url + "server/typescript")
-    });
+    // this.$manager.registerServer("python", {
+    //   modes: "python",
+    //   type: "socket",
+    //   rootUri: () => this.#getRootUri(),
+    //   workspaceFolders: () => this.#getFolders(),
+    //   module: () => import("./ace-linters/src/services/language-client.ts"),
+    //   socket: new ReconnectingWebSocket(this.settings.url + "server/python")
+    //   // socket: new ReconnectingWebSocket("ws://localhost:3031"),
+    // });
 
-    this.$manager.registerServer("rust", {
-      type: "socket",
-      modes: "rust",
-      rootUri: () => this.#getRootUri(),
-      workspaceFolders: () => this.#getFolders(),
-      module: () => import("./ace-linters/src/services/language-client.ts"),
-      initializationOptions: { cancellationPipeName: "rust" },
-      socket: new ReconnectingWebSocket(
-        this.settings.url + "auto/rust-analyzer"
-      )
-    });
+    // this.$manager.registerServer("cpp", {
+    //   modes: "c_cpp",
+    //   type: "socket",
+    //   rootUri: () => this.#getRootUri(),
+    //   workspaceFolders: () => this.#getFolders(),
+    //   module: () => import("./ace-linters/src/services/language-client.ts"),
+    //   socket: new ReconnectingWebSocket(this.settings.url + "server/cpp")
+    // });
+
+    // this.$manager.registerServer("vue", {
+    //   modes: "html",
+    //   type: "socket",
+    //   rootUri: () => this.#getRootUri(),
+    //   workspaceFolders: () => this.#getFolders(),
+    //   initializationOptions: { cleanPendingValidation: true },
+    //   module: () => import("./ace-linters/src/services/language-client.ts"),
+    //   socket: new ReconnectingWebSocket(this.settings.url + "server/vue")
+    // });
+
+    // this.$manager.registerServer("java", {
+    //   modes: "java",
+    //   type: "socket",
+    //   rootUri: () => this.#getRootUri(),
+    //   workspaceFolders: () => this.#getFolders(),
+    //   module: () => import("./ace-linters/src/services/language-client.ts"),
+    //   socket: new ReconnectingWebSocket(this.settings.url + "server/java")
+    // });
+
+    // this.$manager.registerServer("typescript", {
+    //   type: "socket",
+    //   modes: "typescript|javascript|tsx|jsx",
+    //   rootUri: () => this.#getRootUri(),
+    //   workspaceFolders: () => this.#getFolders(),
+    //   module: () => import("./ace-linters/src/services/language-client.ts"),
+    //   initializationOptions: { cancellationPipeName: "typescript" },
+    //   socket: new ReconnectingWebSocket(this.settings.url + "server/typescript")
+    // });
+
+    // this.$manager.registerServer("rust", {
+    //   type: "socket",
+    //   modes: "rust",
+    //   rootUri: () => this.#getRootUri(),
+    //   workspaceFolders: () => this.#getFolders(),
+    //   module: () => import("./ace-linters/src/services/language-client.ts"),
+    //   initializationOptions: { cancellationPipeName: "rust" },
+    //   socket: new ReconnectingWebSocket(
+    //     this.settings.url + "auto/rust-analyzer"
+    //   )
+    // });
 
     this.$client = LanguageProvider.create({
       addEventListener: (...args) => serviceTarget.addEventListener(...args),
@@ -296,43 +335,19 @@ export class AcodeLanguageServerPlugin {
       );
     }
 
-    this.$client.setGlobalOptions("typescript", {
-      parserOptions: { sourceType: "module" },
-      errorCodesToIgnore: [
-        "2304",
-        "2732",
-        "2554",
-        "2339",
-        "2580",
-        "2307",
-        "2540"
-      ],
-      ...(this.settings.options?.typescript || {})
-    });
-
-    this.$client.setGlobalOptions("python", {
-      configuration: { ignore: ["E501", "E401", "F401", "F704"] },
-      pylsp: {
-        configurationSources: ["pycodestyle"],
-        plugins: {
-          pycodestyle: {
-            enabled: true,
-            ignore: ["E501"],
-            maxLineLength: 10
-          },
-          pyflakes: {
-            enabled: this.settings.linter === "pyflakes"
-          },
-          pylint: {
-            enabled: this.settings.linter === "pylint"
-          },
-          pyls_mypy: {
-            enabled: this.settings.linter === "mypy"
-          }
-        }
-      },
-      ...(this.settings.options?.python || {})
-    });
+    // this.$client.setGlobalOptions("typescript", {
+    //   parserOptions: { sourceType: "module" },
+    //   errorCodesToIgnore: [
+    //     "2304",
+    //     "2732",
+    //     "2554",
+    //     "2339",
+    //     "2580",
+    //     "2307",
+    //     "2540"
+    //   ],
+    //   ...(this.settings.options?.typescript || {})
+    // });
 
     this.$client.setGlobalOptions("", {
       ...(this.settings.options?.global || {})
@@ -341,6 +356,7 @@ export class AcodeLanguageServerPlugin {
     this.#setupSidebar();
     this.#setupCommands();
     this.#setupAcodeEvents();
+    this.#setupFooter();
 
     this.$client.registerEditor(editor);
 
@@ -358,24 +374,50 @@ export class AcodeLanguageServerPlugin {
         converters
       },
 
-      registerService: (mode, client) => {
+      registerService: (mode, client, options) => {
         if (Array.isArray(mode)) {
           mode = mode.join("|");
         }
 
         if (client instanceof BaseService || client instanceof LanguageClient) {
+          options = options || {};
+          client.ctx = this.$manager.ctx;
+          client.serviceData.modes = mode;
+          // console.log("Registering service for: " + mode);
+
           this.$manager.registerService(mode.split("|")[0], {
+            options: options,
             serviceInstance: client,
             rootUri: () => this.#getRootUri(),
             workspaceFolders: () => this.#getFolders(),
-            modes: mode, features: client.serverData?.features || {}
+            modes: mode,
+            features: client.serverData?.features || {}
           });
+
+          if (client instanceof LanguageClient) {
+            client.enqueueIfNotConnected(() => {
+              client.connection.onNotification("language/details", params => {
+                console.log(params);
+              });
+            });
+          }
+
+          this.$client.setGlobalOptions(mode, options);
         } else {
           throw new Error("Invalid client.");
         }
       },
       registerEditor: editor => {
         this.$client.registerEditor(editor);
+      },
+
+      getSocket: url => {
+        if (url.startsWith("server") || url.startsWith("auto")) {
+          return new ReconnectingWebSocket(this.settings.url + url);
+        }
+        throw new Error(
+          "Invalid url. Use ReconnectingWebSocket directly instead."
+        );
       },
 
       provideHover(mode, callback) {
@@ -561,7 +603,7 @@ export class AcodeLanguageServerPlugin {
     editorManager.on("add-folder", folder => {
       let allServices = Object.values(this.$manager.$services);
       let services = this.#filterService(capabilities => {
-        return capabilities.workspace?.workspaceFolders?.changeNotifications;
+        return capabilities.wor0ce?.workspaceFolders?.changeNotifications;
       }, allServices);
       services.map(service => {
         service.serviceInstance.connection.sendRequest(
@@ -581,6 +623,16 @@ export class AcodeLanguageServerPlugin {
         );
       });
     });
+  }
+
+  #setupFooter() {
+    let footer = document.querySelector('#root footer');
+    console.log(app)
+    this.$footer = footer.appendChild(
+      tag("div", {
+        className: "button-container"
+      })
+    );
   }
 
   #setupSidebar() {
@@ -903,7 +955,7 @@ export class AcodeLanguageServerPlugin {
       hover: true,
       format: true,
       completion: true,
-      linter: LINTERS[0],
+      // linter: LINTERS[0],
       completionResolve: true,
       replaceCompleters: true,
       url: "ws://localhost:3030/"
@@ -921,13 +973,13 @@ export class AcodeLanguageServerPlugin {
           prompt: "Server URL",
           promptType: "text"
         },
-        {
-          key: "linter",
-          text: "Linter (Python)",
-          value: this.settings.linter,
-          info: "Linter to use with python type checking.",
-          select: LINTERS
-        },
+        // {
+        //   key: "linter",
+        //   text: "Linter (Python)",
+        //   value: this.settings.linter,
+        //   info: "Linter to use with python type checking.",
+        //   select: LINTERS
+        // },
         {
           key: "hover",
           text: "Show Tooltip",
@@ -959,28 +1011,28 @@ export class AcodeLanguageServerPlugin {
             if (!value.endsWith("/")) {
               value = value + "/";
             }
-          case "linter":
-            this.$client.setGlobalOptions("python", {
-              pylsp: {
-                configurationSources: ["pycodestyle"],
-                plugins: {
-                  pycodestyle: {
-                    enabled: true,
-                    ignore: ["E501"],
-                    maxLineLength: 10
-                  },
-                  pyflakes: {
-                    enabled: value === "pyflakes"
-                  },
-                  pylint: {
-                    enabled: value === "pylint"
-                  },
-                  pyls_mypy: {
-                    enabled: value === "mypy"
-                  }
-                }
-              }
-            });
+          // case "linter":
+          //   this.$client.setGlobalOptions("python", {
+          //     pylsp: {
+          //       configurationSources: ["pycodestyle"],
+          //       plugins: {
+          //         pycodestyle: {
+          //           enabled: true,
+          //           ignore: ["E501"],
+          //           maxLineLength: 10
+          //         },
+          //         pyflakes: {
+          //           enabled: value === "pyflakes"
+          //         },
+          //         pylint: {
+          //           enabled: value === "pylint"
+          //         },
+          //         pyls_mypy: {
+          //           enabled: value === "mypy"
+          //         }
+          //       }
+          //     }
+          //   });
           case "replaceCompleters":
             if (value) {
               this.$completers = editor.completers.splice(1, 2);

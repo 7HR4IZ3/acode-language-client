@@ -3,9 +3,9 @@ import { LanguageClientConfig, LanguageService, ServiceOptions } from "../types/
 import { BaseService } from "./base-service";
 export declare class LanguageClient extends BaseService implements LanguageService {
     $service: any;
+    socket: WebSocket;
     private isConnected;
     private isInitialized;
-    private readonly socket;
     private connection;
     private requestsQueue;
     serviceData: LanguageClientConfig;
@@ -27,7 +27,7 @@ export declare class LanguageClient extends BaseService implements LanguageServi
     applyDeltas(identifier: lsp.VersionedTextDocumentIdentifier, deltas: lsp.TextDocumentContentChangeEvent[]): void;
     setValue(identifier: lsp.VersionedTextDocumentIdentifier, value: string): void;
     doHover(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.Hover | null>;
-    doComplete(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.CompletionItem[] | lsp.CompletionList | null>;
+    doComplete(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.CompletionList | lsp.CompletionItem[] | null>;
     doResolve(item: lsp.CompletionItem): Promise<lsp.CompletionItem | null>;
     doValidation(document: lsp.TextDocumentIdentifier): Promise<lsp.Diagnostic[]>;
     format(document: lsp.TextDocumentIdentifier, range: lsp.Range, format: lsp.FormattingOptions): Promise<lsp.TextEdit[]>;
