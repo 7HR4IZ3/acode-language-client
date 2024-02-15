@@ -15,9 +15,13 @@ import {
 import { BaseService } from "./ace-linters/src/services/base-service";
 import { LanguageClient } from "./ace-linters/src/services/language-client.ts";
 
+import { SymbolKind } from "vscode-languageserver-types";
+
+// import "./style.css"
+
 /**
  * @typedef {object} EditorManager
- * @property {Ace.Editor} editor
+ * @property {import("ace-code").Ace.Editor} editor
  */
 
 /** @type {EditorManager} */
@@ -25,6 +29,7 @@ let { editor } = editorManager;
 // const LINTERS = ["pylint", "pyflakes", "mypy"];
 
 let defaultServices = {};
+var Range = ace.require("ace/range").Range;
 
 class CustomService extends BaseService {
   constructor(...args) {
@@ -96,6 +101,8 @@ export class AcodeLanguageServerPlugin {
     this.$page = $page;
     this.$logs = [];
     this.$sockets = {};
+    this.$currentSymbols = null;
+
     document.head.appendChild(
       tag("link", {
         rel: "stylesheet",
@@ -105,12 +112,8 @@ export class AcodeLanguageServerPlugin {
 
     if (window.system?.execute) {
       system
-        .execute("/data/data/com.termux/files/usr/bin/node", {
-          background: false,
-          args: [
-            "/sdcard/Programming/Javascript/Acode/" +
-              "acode-language-servers/server/server.mjs"
-          ]
+        .execute("acode-ls", {
+          background: true
         })
         .then(console.log)
         .catch(console.error);
@@ -165,7 +168,7 @@ export class AcodeLanguageServerPlugin {
       className: "CssService",
       modes: "css",
       rootUri: () => this.#getRootUri(),
-      workspaceFolders: () => this.#getFolders()
+      works6paceFolders: () => this.#getFolders()
     });
 
     this.$manager.registerService("less", {
@@ -204,15 +207,15 @@ export class AcodeLanguageServerPlugin {
       workspaceFolders: () => this.#getFolders()
     });
 
-    this.$manager.registerService("javascript", {
-      features: { signatureHelp: false, documentHighlight: false },
-      module: () =>
-        import("./ace-linters/src/services/javascript/javascript-service.ts"),
-      rootUri: () => this.#getRootUri(),
-      className: "JavascriptService",
-      modes: "javascript",
-      workspaceFolders: () => this.#getFolders()
-    });
+    // this.$manager.registerService("javascript", {
+    //   features: { signatureHelp: false, documentHighlight: false },
+    //   module: () =>
+    //     import("./ace-linters/src/services/javascript/javascript-service.ts"),
+    //   rootUri: () => this.#getRootUri(),
+    //   className: "JavascriptService",
+    //   modes: "javascript",
+    //   workspaceFolders: () => this.#getFolders()
+    // });
 
     this.$manager.registerService("yaml", {
       features: { signatureHelp: false, documentHighlight: false },
@@ -356,7 +359,8 @@ export class AcodeLanguageServerPlugin {
     this.#setupSidebar();
     this.#setupCommands();
     this.#setupAcodeEvents();
-    this.#setupFooter();
+    // this.#setupFooter();
+    this.#setupBreadcrumbs();
 
     this.$client.registerEditor(editor);
 
@@ -364,7 +368,7 @@ export class AcodeLanguageServerPlugin {
       this.$completers = editor.completers.splice(1, 2);
     }
 
-    acode.define("acode-language-client", {
+    this.$exports = {
       BaseService,
       LanguageClient,
       LanguageProvider,
@@ -382,16 +386,22 @@ export class AcodeLanguageServerPlugin {
         if (client instanceof BaseService || client instanceof LanguageClient) {
           options = options || {};
           client.ctx = this.$manager.ctx;
+
           client.serviceData.modes = mode;
+          client.serviceData.options = options;
+          client.serviceData.rootUri = () => this.#getRootUri();
+          client.serviceData.workspaceFolders = () => this.#getFolders();
+
           // console.log("Registering service for: " + mode);
 
-          this.$manager.registerService(mode.split("|")[0], {
+          this.$manager.registerService(options.alias || mode.split("|")[0], {
             options: options,
             serviceInstance: client,
             rootUri: () => this.#getRootUri(),
             workspaceFolders: () => this.#getFolders(),
             modes: mode,
-            features: client.serverData?.features || {}
+            features: (client.serviceData.features =
+              this.setDefaultFeaturesState(client.serviceData.features || {}))
           });
 
           if (client instanceof LanguageClient) {
@@ -440,12 +450,26 @@ export class AcodeLanguageServerPlugin {
         let service = getDefaultService(mode);
         return service.addHandler("validation", callback);
       }
-    });
+    };
+
+    window.acode?.define("acode-language-client", this.$exports);
+  }
+
+  setDefaultFeaturesState(serviceFeatures) {
+    let features = serviceFeatures ?? {};
+    features.hover ??= true;
+    features.completion ??= true;
+    features.completionResolve ??= true;
+    features.format ??= true;
+    features.diagnostics ??= true;
+    features.signatureHelp ??= true;
+    features.documentHighlight ??= true;
+    return features;
   }
 
   log(message, type = "debug") {
     if (!this.$logger) {
-      this.$logger = acode.require("acode.sdk")?.getLogger(plugin.id);
+      this.$logger = window.acode?.require("acode.sdk")?.getLogger(plugin.id);
       if (this.$logger) {
         this.$logs.map(i => this.$logger.info(i));
       }
@@ -502,24 +526,27 @@ export class AcodeLanguageServerPlugin {
       }
     }
 
-    if (this.$rootUri) return this.$rootUri;
+    // if (this.$rootUri) return this.$rootUri;
 
     let folders = this.#getFolders();
 
-    if (folders.length) {
-      this.$rootUri = formatUrl(folders[0].url, false);
-    } /* else {
+    if (folders?.length) {
+      return formatUrl(folders[0].url, false);
+    } else {
       // For testing in browser on pc
-      this.$rootUri =
-        "C:/Users/HP/Desktop_Files/files/programming/javascript/acode plugins/acode-language-servers";
-    } */
-    return this.$rootUri;
+      return "C:/Users/HP/Desktop_Files/files/programming/javascript/acode plugins/acode-language-client";
+    }
+    return null;
+  }
+
+  get workspaceFolders() {
+    return this.#getFolders();
   }
 
   #getFolders() {
     const folders = JSON.parse(localStorage.folders || "[]");
     if (!window.acode && !folders.length) {
-      return [];
+      return null;
     }
 
     this.$folders = folders.map(item => ({
@@ -550,28 +577,49 @@ export class AcodeLanguageServerPlugin {
     });
   }
 
+  #setupBreadcrumbs() {
+    this.$breadcrumbsNode = tag("ul", {
+      className: "breadcrumbs"
+    });
+    let mainElement = document.querySelector("#root ul.open-file-list");
+    if (!mainElement) {
+      mainElement = document.body;
+    }
+    mainElement.after(this.$breadcrumbsNode);
+  }
+
   #setupAcodeEvents() {
+    if (!window.acode) return;
+
     editorManager.on("remove-file", file => {
       if (!file.session) return;
       let services = this.#getServices(file.session);
-      services.map(service => {
-        service.serviceInstance?.removeDocument(
-          service.serviceInstance.getDocument(
-            this.$client.$getFileName(file.session)
-          )
-        );
-      });
+      try {
+        services.map(service => {
+          service.serviceInstance?.removeDocument(
+            service.serviceInstance.getDocument(
+              this.$client.$getFileName(file.session)
+            )
+          );
+        });
+      } catch (e) {
+        console.error(e);
+      }
     });
 
     editorManager.on("rename-file", file => {
       let services = this.#getServices(file.session);
-      services.map(service => {
-        service.serviceInstance?.removeDocument(
-          service.serviceInstance.getDocument(
-            this.$client.$getFileName(file.session)
-          )
-        );
-      });
+      try {
+        services.map(service => {
+          service.serviceInstance?.removeDocument(
+            service.serviceInstance.getDocument(
+              this.$client.$getFileName(file.session)
+            )
+          );
+        });
+      } catch (e) {
+        console.error(e);
+      }
 
       this.$client.$registerSession(file.session, editorManager.editor);
     });
@@ -581,53 +629,74 @@ export class AcodeLanguageServerPlugin {
       let services = this.#filterService(capabilities => {
         return capabilities.workspace?.workspaceFolders?.changeNotifications;
       }, allServices);
-      services.map(service => {
-        service.serviceInstance.connection.sendRequest(
-          "workspace/didChangeWorkspaceFolders",
-          {
-            event: {
-              added: [],
-              removed: [
-                {
-                  name: folder.opts?.name,
-                  uri: formatUrl(folder.url, false),
-                  url: formatUrl(folder.url, false)
-                }
-              ]
+      try {
+        services.map(service => {
+          service.serviceInstance.connection.sendRequest(
+            "workspace/didChangeWorkspaceFolders",
+            {
+              event: {
+                added: [],
+                removed: [
+                  {
+                    name: folder.opts?.name,
+                    uri: formatUrl(folder.url, false),
+                    url: formatUrl(folder.url, false)
+                  }
+                ]
+              }
             }
-          }
-        );
-      });
+          );
+        });
+      } catch (e) {
+        console.error(e);
+      }
     });
 
     editorManager.on("add-folder", folder => {
       let allServices = Object.values(this.$manager.$services);
       let services = this.#filterService(capabilities => {
-        return capabilities.wor0ce?.workspaceFolders?.changeNotifications;
+        return capabilities.workspace?.workspaceFolders?.changeNotifications;
       }, allServices);
-      services.map(service => {
-        service.serviceInstance.connection.sendRequest(
-          "workspace/didChangeWorkspaceFolders",
-          {
-            event: {
-              removed: [],
-              added: [
-                {
-                  name: folder.opts?.name,
-                  uri: formatUrl(folder.url, false),
-                  url: formatUrl(folder.url, false)
-                }
-              ]
+      try {
+        services.map(service => {
+          service.serviceInstance.connection.sendRequest(
+            "workspace/didChangeWorkspaceFolders",
+            {
+              event: {
+                removed: [],
+                added: [
+                  {
+                    name: folder.opts?.name,
+                    uri: formatUrl(folder.url, false),
+                    url: formatUrl(folder.url, false)
+                  }
+                ]
+              }
             }
-          }
-        );
-      });
+          );
+        });
+      } catch (e) {
+        console.error(e);
+      }
     });
+
+    let timeout;
+    this.$func = async () => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      timeout = setTimeout(async () => {
+        await this.$buildBreadcrumbs();
+        timeout = null;
+      }, 2000);
+    };
+
+    editor.on("change", this.$func);
   }
 
   #setupFooter() {
-    let footer = document.querySelector('#root footer');
-    console.log(app)
+    let footer = document.querySelector("#root footer");
+
     this.$footer = footer.appendChild(
       tag("div", {
         className: "button-container"
@@ -637,12 +706,12 @@ export class AcodeLanguageServerPlugin {
 
   #setupSidebar() {
     this.$node = tag("div", { className: "refBody" });
-    this.$page.body.appendChild(this.$node);
+    this.$page?.body.appendChild(this.$node);
   }
 
   #showReferences(references) {
     let helpers = acode.require("helpers");
-    this.$page.settitle("References");
+    this.$page?.settitle("References");
     this.$node.innerHTML = "";
 
     for (let ref of references) {
@@ -664,7 +733,7 @@ export class AcodeLanguageServerPlugin {
       );
     }
 
-    this.$page.show();
+    this.$page?.show();
   }
 
   #setupCommands() {
@@ -703,8 +772,8 @@ export class AcodeLanguageServerPlugin {
       }
     ];
 
-    let selection = acode.require("selectionMenu");
-    selection.add(
+    let selection = window.acode?.require("selectionMenu");
+    selection?.add(
       async () => {
         let action = await acode.select(
           "Select Action",
@@ -904,7 +973,10 @@ export class AcodeLanguageServerPlugin {
     let position = fromPoint(cursor);
 
     let currentName = editor.getSelectedText();
-    let newName = await acode.prompt("New name", currentName);
+    let newName = await (window.acode?.prompt || prompt)(
+      "New name",
+      currentName
+    );
 
     services.map(service => {
       if (service.connection) {
@@ -934,6 +1006,181 @@ export class AcodeLanguageServerPlugin {
           });
       }
     });
+  }
+
+  async getDocumentSymbols() {
+    let services = this.#filterService(
+      capabilities => capabilities.documentSymbolProvider
+    );
+
+    if (!services.length) return [];
+
+    try {
+      return await services[0].serviceInstance.connection.sendRequest(
+        "textDocument/documentSymbol",
+        {
+          textDocument: {
+            uri: this.$client.$getFileName(editor.session)
+          }
+        }
+      );
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async $buildBreadcrumbs() {
+    let symbols = await this.getDocumentSymbols();
+
+    if (symbols && symbols !== this.$currentSymbols) {
+      this.$currentSymbols = symbols;
+
+      function createTreeObject(objects) {
+        // Helper function to find the immediate parent object by name
+        function findImmediateParent(name) {
+          return objects.find(object => object.name === name);
+        }
+
+        // Build the tree recursively
+        function buildNode(object) {
+          const node = {
+            ...object,
+            children: []
+          };
+
+          const children = objects.filter(
+            child => findImmediateParent(child.containerName) === object
+          );
+          children.forEach(child => node.children.push(buildNode(child)));
+
+          return node;
+        }
+
+        // Find the root nodes (objects with no parent)
+        const rootNodes = objects.filter(object => !object.containerName);
+
+        // Build the tree object and return it
+        return rootNodes.map(node => buildNode(node));
+      }
+
+      let tree = createTreeObject(symbols);
+      this.$breadcrumbsTree = tree;
+      this.$buildBreadcrumbsUi(tree);
+      return tree;
+    }
+  }
+
+  $buildBreadcrumbsUi(tree) {
+    let breadcrumbNodes = [];
+
+    let buildBreadcrumbNodes = () => {
+      this.$breadcrumbsNode.innerHTML = "";
+      for (let object of breadcrumbNodes) {
+        let node = tag("span", {
+          textContent: object.name,
+          className: "breadcrumb-name"
+        });
+        node = this.$breadcrumbsNode.appendChild(
+          tag("li", {
+            className: "breadcrumb-item",
+            children: [node]
+          })
+        );
+      }
+    };
+
+    let createNode = (object, level = 0) => {
+      let dropdown,
+        node = tag("span", {
+          className: "dropdown-name",
+          textContent: object.name
+        });
+
+      if (object.children.length) {
+        dropdown = tag("ul", {
+          className: "dropdown",
+          children: object.children.map(child => {
+            let childNode = createNode(child, level + 1);
+            let item = tag("li", {
+              className: "dropdown-item",
+              children: [childNode]
+            });
+            if (!(childNode.children.length >= 1)) {
+              item.classList.add("childless");
+            }
+            return item;
+          })
+        });
+        node.appendChild(dropdown);
+      }
+      node.onclick = ({ target }) => {
+        if (target === node) {
+          if (object.children.length && dropdown) {
+            dropdown.classList.toggle("visible");
+          }
+          breadcrumbNodes[level] = object;
+          breadcrumbNodes.splice(level + 1);
+          buildBreadcrumbNodes();
+
+          editor.scrollToLine(object.location.range.start.line - 10);
+
+          let start = object.location.range.start.line;
+          let end = object.location.range.end.line;
+
+          if (this.$currentRange !== undefined) {
+            editor.session.removeMarker(this.$currentRange);
+          }
+
+          this.$currentRange = editor.session.addMarker(
+            new Range(start, 0, end, 0),
+            "ace_selected-word",
+            "fullLine"
+          );
+        }
+      };
+      return node;
+    };
+
+    let mainNode;
+    if (tree.length >= 1) {
+      if (tree.length === 1) {
+        breadcrumbNodes[0] = tree[0];
+      } else {
+        breadcrumbNodes[0] = {
+          name: tree[0].name,
+          children: tree
+        };
+      }
+      mainNode = createNode(breadcrumbNodes[0]);
+    }
+    mainNode?.classList.add("breadcrumb-dropdown");
+    buildBreadcrumbNodes();
+
+    document.addEventListener("click", ({ target }) => {
+      if (
+        !target.matches(
+          ".breadcrumbs, .breadcrumb-dropdown, .breadcrumb-item, " +
+            ".breadcrumb-name, .dropdown-item, .dropdown-name"
+        )
+      ) {
+        if (mainNode?.classList.contains("visible")) {
+          mainNode?.classList.remove("visible");
+        }
+      } else {
+        mainNode?.classList.add("visible");
+      }
+    });
+
+    editor.on("focus", () => {
+      if (mainNode?.classList.contains("visible")) {
+        mainNode?.classList.remove("visible");
+      }
+      if (this.$currentRange !== undefined) {
+        editor.session.removeMarker(this.$currentRange);
+      }
+    });
+
+    return mainNode ? document.body.appendChild(mainNode) : null;
   }
 
   get settings() {

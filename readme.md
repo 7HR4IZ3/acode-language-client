@@ -49,6 +49,11 @@ _____
 
 This section explains how to use the plugin and the exposed api's for usage in other Acode plugins
 
+
+Youtube tutorial: https://youtu.be/e8Ge4qBd--c?si=314bPpChORcFu4jT
+<iframe src="https://youtu.be/e8Ge4qBd--c?si=314bPpChORcFu4jT"></iframe>
+
+
 _____
 ### Server
 

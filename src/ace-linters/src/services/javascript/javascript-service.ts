@@ -1,11 +1,8 @@
 import {BaseService} from "../base-service";
 import * as lsp from "vscode-languageserver-protocol";
+import {Linter} from "./lib";
 import {toDiagnostics} from "./eslint-converters";
 import {JavascriptServiceOptions, LanguageService} from "../../types/language-service";
-
-import {Linter} from "./lib/index.js";
-
-// let {Linter} = require("eslint/linter");
 
 export class JavascriptService extends BaseService<JavascriptServiceOptions> implements LanguageService {
     $service;
@@ -17,7 +14,7 @@ export class JavascriptService extends BaseService<JavascriptServiceOptions> imp
         jasmine: false,
         mocha: true,
         es6: true,
-        jquery: true,
+        jquery: false,
         meteor: false,
     };
 

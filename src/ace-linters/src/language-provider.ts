@@ -504,7 +504,7 @@ class SessionLanguageProvider {
   };
   
   private $extensionToMode = {
-    vue: "vue"
+    vue: "html"
   };
 
   editor: Ace.Editor;

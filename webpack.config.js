@@ -1,7 +1,7 @@
 const { exec } = require("child_process");
 const path = require("path");
 const TerserPlugin = require("terser-webpack-plugin");
-// const NodePolyfillPlugin = require('node-polyfill-webpack-plugin');
+const NodePolyfillPlugin = require('node-polyfill-webpack-plugin');
 
 module.exports = (env, options) => {
   const { mode = "development" } = options;
@@ -52,7 +52,7 @@ module.exports = (env, options) => {
       }
     },
     plugins: [
-      // NodePolyfillPlugin(),
+      new NodePolyfillPlugin(),
       {
         apply: compiler => {
           compiler.hooks.afterDone.tap("pack-zip", () => {

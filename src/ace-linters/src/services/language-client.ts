@@ -94,6 +94,10 @@ export class LanguageClient extends BaseService implements LanguageService {
       diagnostic: {
         dynamicRegistration: true,
       },
+      documentSymbol: {
+        dynamicRegistration: true,
+        labelSupport: true,
+      },
       publishDiagnostics: {
         codeDescriptionSupport: true,
         relatedInformation: true,
@@ -413,9 +417,9 @@ export class LanguageClient extends BaseService implements LanguageService {
       workspaceFolders: folders,
     };
     
-    let mode = this.serviceData.modes.split("|")[0];
+    let mode = this.serviceData.options?.alias || this.serviceData.modes.split("|")[0];
 
-    showToast("Initializing " + mode + " Language Server...");
+    showToast("Initializing " + mode + " language server...");
 
     this.connection
       .sendRequest("initialize", message)
@@ -424,7 +428,7 @@ export class LanguageClient extends BaseService implements LanguageService {
         this.serviceCapabilities =
           params.capabilities as lsp.ServerCapabilities;
 
-        showToast("Initialized " + mode + " Language Server.");
+        showToast("Initialized " + mode + " language server.");
 
         this.connection.sendNotification("initialized", {}).then(() => {
           this.connection.sendNotification("workspace/didChangeConfiguration", {
