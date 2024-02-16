@@ -35,7 +35,7 @@ export class HtmlService extends BaseService<HtmlServiceOptions> implements Lang
         wrapAttributesIndentSize: 120
     }
 
-    serviceCapabilities = {
+    serviceCapabilities: lsp.ServerCapabilities = {
         completionProvider: {
             triggerCharacters: ['.', ':', '<', '"', '=', '/']
         },
@@ -46,7 +46,8 @@ export class HtmlService extends BaseService<HtmlServiceOptions> implements Lang
         documentRangeFormattingProvider: true,
         documentFormattingProvider: true,
         documentHighlightProvider: true,
-        hoverProvider: true
+        hoverProvider: true,
+        documentSymbolProvider: true
     }
 
     constructor(mode: string) {
@@ -66,6 +67,15 @@ export class HtmlService extends BaseService<HtmlServiceOptions> implements Lang
             return Promise.resolve([]);
 
         return Promise.resolve(this.$service.format(fullDocument, range, this.getFormattingOptions(options)));
+    }
+
+    findDocumentSymbols(document: lsp.TextDocumentIdentifier) {
+        let fullDocument = this.getDocument(document.uri);
+        if (!fullDocument)
+            return null;
+
+        let htmlDocument = this.$service.parseHTMLDocument(fullDocument);
+        return this.$service.findDocumentSymbols(fullDocument, htmlDocument)
     }
 
     async doHover(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.Hover | null> {

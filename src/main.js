@@ -31,6 +31,26 @@ let { editor } = editorManager;
 let defaultServices = {};
 var Range = ace.require("ace/range").Range;
 
+let symbolKindToClass = {
+  1: "file",
+  2: "module",
+  3: "module",
+  4: "module",
+  5: "class",
+  6: "method",
+  7: "property",
+  8: "field",
+  9: "method",
+  10: "enum",
+  11: "interface",
+  12: "function",
+  13: "variable",
+  14: "variable",
+  20: "attribute",
+  24: "event",
+  25: "typeparameter"
+};
+
 class CustomService extends BaseService {
   constructor(...args) {
     super(...args);
@@ -316,22 +336,7 @@ export class AcodeLanguageServerPlugin {
     if (window.acode && this.settings.format) {
       acode.registerFormatter(
         "Acode Language Servers",
-        [
-          "html",
-          "css",
-          "scss",
-          "less",
-          "js",
-          "ts",
-          "jsx",
-          "tsx",
-          "lua",
-          "xml",
-          "yaml",
-          "json",
-          "json5",
-          "py"
-        ],
+        ["html", "css", "scss", "less", "lua", "xml", "yaml", "json", "json5"],
         () => {
           this.$client.format();
         }
@@ -377,6 +382,8 @@ export class AcodeLanguageServerPlugin {
       utils: {
         converters
       },
+
+      format: () => this.$client.format(),
 
       registerService: (mode, client, options) => {
         if (Array.isArray(mode)) {
@@ -579,13 +586,37 @@ export class AcodeLanguageServerPlugin {
 
   #setupBreadcrumbs() {
     this.$breadcrumbsNode = tag("ul", {
-      className: "breadcrumbs"
+      className: "breadcrumbs ace_autocomplete"
     });
     let mainElement = document.querySelector("#root ul.open-file-list");
     if (!mainElement) {
       mainElement = document.body;
     }
     mainElement.after(this.$breadcrumbsNode);
+
+    document.addEventListener("click", ({ target }) => {
+      if (
+        !target.matches(
+          ".breadcrumbs, .breadcrumb-dropdown, .breadcrumb-item *, " +
+            ".breadcrumb-name, .dropdown-item, .dropdown-name *"
+        )
+      ) {
+        if (this.$mainNode?.classList.contains("visible")) {
+          this.$mainNode?.classList.remove("visible");
+        }
+      } else {
+        this.$mainNode?.classList.add("visible");
+      }
+    });
+
+    editor.on("focus", () => {
+      if (this.$mainNode?.classList.contains("visible")) {
+        this.$mainNode?.classList.remove("visible");
+      }
+      if (this.$currentRange !== undefined) {
+        editor.session.removeMarker(this.$currentRange);
+      }
+    });
   }
 
   #setupAcodeEvents() {
@@ -692,6 +723,10 @@ export class AcodeLanguageServerPlugin {
     };
 
     editor.on("change", this.$func);
+    editorManager.on("switch-file", async () =>
+      setTimeout(this.$buildBreadcrumbs.bind(this), 100)
+    );
+    this.$func();
   }
 
   #setupFooter() {
@@ -1016,14 +1051,20 @@ export class AcodeLanguageServerPlugin {
     if (!services.length) return [];
 
     try {
-      return await services[0].serviceInstance.connection.sendRequest(
-        "textDocument/documentSymbol",
-        {
-          textDocument: {
-            uri: this.$client.$getFileName(editor.session)
+      if (services[0].serviceInstance instanceof LanguageClient) {
+        return await services[0].serviceInstance.connection.sendRequest(
+          "textDocument/documentSymbol",
+          {
+            textDocument: {
+              uri: this.$client.$getFileName(editor.session)
+            }
           }
-        }
-      );
+        );
+      } else {
+        return services[0].serviceInstance.findDocumentSymbols({
+          uri: this.$client.$getFileName(editor.session)
+        });
+      }
     } catch (e) {
       console.error(e);
     }
@@ -1077,8 +1118,17 @@ export class AcodeLanguageServerPlugin {
       this.$breadcrumbsNode.innerHTML = "";
       for (let object of breadcrumbNodes) {
         let node = tag("span", {
-          textContent: object.name,
-          className: "breadcrumb-name"
+          className: "breadcrumb-name ace_autocomplete",
+          children: [
+            tag("i", {
+              className:
+                "ace_completion-icon ace_" +
+                (symbolKindToClass[object.kind] || "value")
+            }),
+            tag("span", {
+              textContent: object.name
+            })
+          ]
         });
         node = this.$breadcrumbsNode.appendChild(
           tag("li", {
@@ -1093,7 +1143,17 @@ export class AcodeLanguageServerPlugin {
       let dropdown,
         node = tag("span", {
           className: "dropdown-name",
-          textContent: object.name
+          children: [
+            tag("span", { className: "dropdown-toggle" }),
+            tag("i", {
+              className:
+                "ace_completion-icon ace_" +
+                (symbolKindToClass[object.kind] || "value")
+            }),
+            tag("span", {
+              textContent: object.name
+            })
+          ]
         });
 
       if (object.children.length) {
@@ -1105,7 +1165,7 @@ export class AcodeLanguageServerPlugin {
               className: "dropdown-item",
               children: [childNode]
             });
-            if (!(childNode.children.length >= 1)) {
+            if (!childNode.querySelector("ul.dropdown")) {
               item.classList.add("childless");
             }
             return item;
@@ -1114,13 +1174,15 @@ export class AcodeLanguageServerPlugin {
         node.appendChild(dropdown);
       }
       node.onclick = ({ target }) => {
-        if (target === node) {
+        if (target === node || target.parentElement === node) {
           if (object.children.length && dropdown) {
             dropdown.classList.toggle("visible");
           }
           breadcrumbNodes[level] = object;
           breadcrumbNodes.splice(level + 1);
           buildBreadcrumbNodes();
+
+          if (!object.location) return;
 
           editor.scrollToLine(object.location.range.start.line - 10);
 
@@ -1141,46 +1203,27 @@ export class AcodeLanguageServerPlugin {
       return node;
     };
 
-    let mainNode;
+    this.$mainNode?.remove();
+
     if (tree.length >= 1) {
       if (tree.length === 1) {
         breadcrumbNodes[0] = tree[0];
       } else {
         breadcrumbNodes[0] = {
-          name: tree[0].name,
+          ...tree[0],
           children: tree
         };
       }
-      mainNode = createNode(breadcrumbNodes[0]);
+      this.$mainNode = createNode(
+        breadcrumbNodes[0],
+        breadcrumbNodes.length - 1
+      );
     }
-    mainNode?.classList.add("breadcrumb-dropdown");
+    this.$mainNode?.classList.add("breadcrumb-dropdown");
+    this.$mainNode?.classList.add("ace_autocomplete");
     buildBreadcrumbNodes();
 
-    document.addEventListener("click", ({ target }) => {
-      if (
-        !target.matches(
-          ".breadcrumbs, .breadcrumb-dropdown, .breadcrumb-item, " +
-            ".breadcrumb-name, .dropdown-item, .dropdown-name"
-        )
-      ) {
-        if (mainNode?.classList.contains("visible")) {
-          mainNode?.classList.remove("visible");
-        }
-      } else {
-        mainNode?.classList.add("visible");
-      }
-    });
-
-    editor.on("focus", () => {
-      if (mainNode?.classList.contains("visible")) {
-        mainNode?.classList.remove("visible");
-      }
-      if (this.$currentRange !== undefined) {
-        editor.session.removeMarker(this.$currentRange);
-      }
-    });
-
-    return mainNode ? document.body.appendChild(mainNode) : null;
+    return this.$mainNode ? document.body.appendChild(this.$mainNode) : null;
   }
 
   get settings() {

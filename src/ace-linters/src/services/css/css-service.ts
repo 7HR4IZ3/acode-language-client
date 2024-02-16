@@ -30,7 +30,8 @@ export class CssService extends BaseService implements LanguageService {
         documentRangeFormattingProvider: true,
         documentFormattingProvider: true,
         documentHighlightProvider: true,
-        hoverProvider: true
+        hoverProvider: true,
+        documentSymbolProvider: true
     }
     
     constructor(mode: string) {
@@ -70,6 +71,15 @@ export class CssService extends BaseService implements LanguageService {
 
         return Promise.resolve(this.$service.format(fullDocument, range, this.getFormattingOptions(options)));
     }
+
+    async findDocumentSymbols(document: lsp.TextDocumentIdentifier) {
+        let fullDocument = this.getDocument(document.uri);
+        if (!fullDocument)
+            return null;
+        let cssDocument = this.$service.parseStylesheet(fullDocument);
+        return this.$service.findDocumentSymbols(fullDocument, cssDocument)
+    }
+
 
     async doHover(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.Hover | null> {
         let fullDocument = this.getDocument(document.uri);

@@ -20,11 +20,13 @@ export declare class CssService extends BaseService implements LanguageService {
         documentFormattingProvider: boolean;
         documentHighlightProvider: boolean;
         hoverProvider: boolean;
+        documentSymbolProvider: boolean;
     };
     constructor(mode: string);
     private $initLanguageService;
     getFormattingOptions(options: CSSFormatConfiguration): CSSFormatConfiguration;
     format(document: lsp.TextDocumentIdentifier, range: lsp.Range, options: CSSFormatConfiguration): Promise<lsp.TextEdit[]>;
+    findDocumentSymbols(document: lsp.TextDocumentIdentifier): Promise<lsp.SymbolInformation[] | null>;
     doHover(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.Hover | null>;
     doValidation(document: lsp.TextDocumentIdentifier): Promise<lsp.Diagnostic[]>;
     doComplete(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.CompletionItem[] | lsp.CompletionList | null>;

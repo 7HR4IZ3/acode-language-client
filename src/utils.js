@@ -319,5 +319,5 @@ export function commandAsWorker(command) {
 }
 
 export function showToast(message) {
-  acode.require("toast")(message);
+  (window.acode?.require("toast") || console.log)(message);
 }

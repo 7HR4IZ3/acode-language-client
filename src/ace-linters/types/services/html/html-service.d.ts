@@ -23,22 +23,11 @@ export declare class HtmlService extends BaseService<HtmlServiceOptions> impleme
         "tag-pair": boolean;
     };
     $defaultFormatOptions: HTMLFormatConfiguration;
-    serviceCapabilities: {
-        completionProvider: {
-            triggerCharacters: string[];
-        };
-        diagnosticProvider: {
-            interFileDependencies: boolean;
-            workspaceDiagnostics: boolean;
-        };
-        documentRangeFormattingProvider: boolean;
-        documentFormattingProvider: boolean;
-        documentHighlightProvider: boolean;
-        hoverProvider: boolean;
-    };
+    serviceCapabilities: lsp.ServerCapabilities;
     constructor(mode: string);
     getFormattingOptions(options: HTMLFormatConfiguration): HTMLFormatConfiguration;
     format(document: lsp.TextDocumentIdentifier, range: lsp.Range, options: HTMLFormatConfiguration): Promise<lsp.TextEdit[]>;
+    findDocumentSymbols(document: lsp.TextDocumentIdentifier): lsp.SymbolInformation[] | null;
     doHover(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.Hover | null>;
     doValidation(document: lsp.TextDocumentIdentifier): Promise<lsp.Diagnostic[]>;
     doComplete(document: lsp.TextDocumentIdentifier, position: lsp.Position): Promise<lsp.CompletionItem[] | lsp.CompletionList | null>;
