@@ -321,3 +321,7 @@ export function commandAsWorker(command) {
 export function showToast(message) {
   (window.acode?.require("toast") || console.log)(message);
 }
+
+export function getCodeLens(callback) {
+  window.require(["ace/ext/code_lens"],  callback);
+}

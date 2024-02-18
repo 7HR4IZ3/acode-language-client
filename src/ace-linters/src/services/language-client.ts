@@ -88,6 +88,9 @@ export class LanguageClient extends BaseService implements LanguageService {
           activeParameterSupport: true,
         },
       },
+      codeLens: {
+        dynamicRegistration: true,
+      },
       documentHighlight: {
         dynamicRegistration: true,
       },

@@ -15,6 +15,13 @@ _____
 - Rename Symbol
 - Code actions
 - Error Diagnostics
+- Code navigations via breadcrumbs
+- Supports code lens
+
+___
+## New in v1.0.2
+- Support for breadcrumb navigation.
+- Added support for code lens.
 
 _____
 ## Supported Languages

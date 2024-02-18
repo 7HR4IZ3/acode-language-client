@@ -15,7 +15,7 @@ import {
   toMarkerGroupItem,
   toRange,
   toResolvedCompletion,
-  toTooltip,
+  toTooltip
 } from "./type-converters/lsp-converters";
 import * as lsp from "vscode-languageserver-protocol";
 
@@ -30,7 +30,7 @@ import {
   ServiceOptionsMap,
   ServiceStruct,
   SupportedServices,
-  Tooltip,
+  Tooltip
 } from "./types/language-service";
 import { MarkerGroup } from "./ace/marker_group";
 import { AceRange } from "./ace/range-singleton";
@@ -59,12 +59,12 @@ export class LanguageProvider {
     this.options.functionality ??= {
       hover: true,
       completion: {
-        overwriteCompleters: true,
+        overwriteCompleters: true
       },
       completionResolve: true,
       format: true,
       documentHighlights: true,
-      signatureHelp: true,
+      signatureHelp: true
     };
     this.options.markdownConverter ??= new showdown.Converter();
     this.$signatureTooltip = new SignatureTooltip(this);
@@ -120,7 +120,7 @@ export class LanguageProvider {
       worker = createWorker(
         {
           services: source.services,
-          serviceManagerCdn: source.serviceManagerCdn,
+          serviceManagerCdn: source.serviceManagerCdn
         },
         source.includeDefaultLinters
       );
@@ -141,8 +141,7 @@ export class LanguageProvider {
         this.$messageController,
         options
       );
-  };
-
+  }
 
   private $getSessionLanguageProvider(
     session: Ace.EditSession
@@ -155,7 +154,7 @@ export class LanguageProvider {
     if (!sessionLanguageProvider) {
       this.$registerSession(
         session,
-        this.editors.find((editor) => editor.session == session) ||
+        this.editors.find(editor => editor.session == session) ||
           this.editors[0]
       );
       sessionLanguageProvider = this.$getSessionLanguageProvider(session);
@@ -226,7 +225,7 @@ export class LanguageProvider {
       let session = editor.session;
       let docPos = e.getDocumentPosition();
 
-      this.doHover(session, docPos, (hover) => {
+      this.doHover(session, docPos, hover => {
         if (!hover) return;
         var errorMarker =
           this.$getSessionLanguageProvider(
@@ -349,7 +348,7 @@ export class LanguageProvider {
     this.$messageController.doHover(
       this.$getFileName(session),
       fromPoint(position),
-      (hover) => callback && callback(toTooltip(hover))
+      hover => callback && callback(toTooltip(hover))
     );
   }
 
@@ -361,7 +360,7 @@ export class LanguageProvider {
     this.$messageController.provideSignatureHelp(
       this.$getFileName(session),
       fromPoint(position),
-      (signatureHelp) => callback && callback(fromSignatureHelp(signatureHelp))
+      signatureHelp => callback && callback(fromSignatureHelp(signatureHelp))
     );
   }
 
@@ -391,7 +390,7 @@ export class LanguageProvider {
     this.$messageController.doComplete(
       this.$getFileName(session),
       fromPoint(cursor),
-      (completions) => completions && callback(toCompletions(completions))
+      completions => completions && callback(toCompletions(completions))
     );
   }
 
@@ -410,10 +409,10 @@ export class LanguageProvider {
     let completer = {
       getCompletions: async (editor, session, pos, prefix, callback) => {
         this.$getSessionLanguageProvider(session).$sendDeltaQueue(() => {
-          this.doComplete(editor, session, (completions) => {
+          this.doComplete(editor, session, completions => {
             let fileName = this.$getFileName(session);
             if (!completions) return;
-            completions.forEach((item) => {
+            completions.forEach(item => {
               item.completerId = completer.id;
               item["fileName"] = fileName;
             });
@@ -448,7 +447,7 @@ export class LanguageProvider {
         }
         return item;
       },
-      id: "lspCompleters",
+      id: "lspCompleters"
     };
     // if (
     //   this.options.functionality.completion &&
@@ -494,7 +493,7 @@ class SessionLanguageProvider {
     diagnosticMarkers: MarkerGroup | null;
   } = {
     occurrenceMarkers: null,
-    diagnosticMarkers: null,
+    diagnosticMarkers: null
   };
 
   private extensions = {
@@ -502,7 +501,7 @@ class SessionLanguageProvider {
     javascript: "js",
     python: "py"
   };
-  
+
   private $extensionToMode = {
     vue: "html"
   };
@@ -564,11 +563,11 @@ class SessionLanguageProvider {
     if (
       capabilities &&
       capabilities.some(
-        (capability) => capability?.completionProvider?.triggerCharacters
+        capability => capability?.completionProvider?.triggerCharacters
       )
     ) {
       let completer = this.editor.completers.find(
-        (completer) => completer.id === "lspCompleters"
+        completer => completer.id === "lspCompleters"
       );
       if (completer) {
         let allTriggerCharacters = capabilities.reduce((acc, capability) => {
@@ -601,7 +600,7 @@ class SessionLanguageProvider {
     if (fileName) {
       let extension = getExtension(fileName);
       if (this.$extensionToMode[extension]) {
-        return this.$extensionToMode[extension]
+        return this.$extensionToMode[extension];
       }
     }
     return this.session["$modeId"];
@@ -614,7 +613,7 @@ class SessionLanguageProvider {
     };
   }
 
-  private $changeListener = (delta) => {
+  private $changeListener = delta => {
     this.session.doc["version"]++;
     if (!this.$deltaQueue) {
       this.$deltaQueue = [];
@@ -630,7 +629,7 @@ class SessionLanguageProvider {
     if (deltas.length)
       this.$messageController.change(
         this.fileName,
-        deltas.map((delta) =>
+        deltas.map(delta =>
           fromAceDelta(delta, this.session.doc.getNewLineCharacter())
         ),
         this.session.doc,
@@ -648,7 +647,7 @@ class SessionLanguageProvider {
       this.state.diagnosticMarkers = new MarkerGroup(this.session);
     }
     this.state.diagnosticMarkers.setMarkers(
-      diagnostics.map((el) =>
+      diagnostics.map(el =>
         toMarkerGroupItem(
           CommonConverter.toRange(toRange(el.range)),
           "language_highlight_error",
@@ -681,13 +680,13 @@ class SessionLanguageProvider {
         {
           start: {
             row: 0,
-            column: 0,
+            column: 0
           },
           end: {
             row: row,
-            column: column,
-          },
-        },
+            column: column
+          }
+        }
       ];
     }
     for (let range of aceRangeDatas) {

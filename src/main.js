@@ -3,7 +3,8 @@ import {
   ReconnectingWebSocket,
   formatUrl,
   unFormatUrl,
-  getFolderName
+  getFolderName,
+  getCodeLens
 } from "./utils.js";
 
 import * as converters from "./ace-linters/src/type-converters/lsp-converters";
@@ -363,6 +364,7 @@ export class AcodeLanguageServerPlugin {
 
     this.#setupSidebar();
     this.#setupCommands();
+    this.#setupCodelens();
     this.#setupAcodeEvents();
     // this.#setupFooter();
     this.#setupBreadcrumbs();
@@ -729,6 +731,70 @@ export class AcodeLanguageServerPlugin {
     this.$func();
   }
 
+  #setupCodelens() {
+    return new Promise((resolve, reject) => {
+      getCodeLens(codeLens => {
+        if (!codeLens) return reject("CodeLens not available.");
+
+        let commandId = "acode-ls.executeCodeLens";
+        editor.commands.addCommand({
+          name: commandId,
+          exec: (editor, args) => {
+            console.log("Executing:", args);
+          }
+        });
+
+        editor.commands.addCommand({
+          name: "clearCodeLenses",
+          exec: (editor, args) => {
+            codeLens.clear(editor.session);
+          }
+        });
+        editor.setOption("enableCodeLens", true);
+
+        codeLens.registerCodeLensProvider(editor, {
+          provideCodeLenses: async (session, callback) => {
+            let services = this.#filterService(
+              capabilities => capabilities.codeLensProvider
+            ).map(service => service.serviceInstance);
+            let uri = this.$client.$getFileName(editor.session);
+            let result = [];
+
+            let promises = services.map(async service => {
+              if (service.connection) {
+                let response = await service.connection.sendRequest(
+                  "textDocument/codeLens",
+                  { textDocument: { uri } }
+                );
+                console.log("CodeLens:", response);
+                for (let item of response) {
+                  if (!item.command && !item.data) continue;
+
+                  result.push({
+                    ...toRange(item.range),
+                    command: {
+                      id: commandId,
+                      title:
+                        item.command?.tooltip ||
+                        item.command?.title ||
+                        (item.data || [])[2] || "Unknown Action",
+                      arguments: [item]
+                    }
+                  });
+                }
+              }
+            });
+            await Promise.all(promises);
+
+            console.log(result)
+            callback(null, result);
+          }
+        });
+        resolve(codeLens);
+      });
+    });
+  }
+
   #setupFooter() {
     let footer = document.querySelector("#root footer");
 
@@ -1071,9 +1137,13 @@ export class AcodeLanguageServerPlugin {
   }
 
   async $buildBreadcrumbs() {
+    this.$breadcrumbsNode.innerHTML = "";
+
     let symbols = await this.getDocumentSymbols();
 
-    if (symbols && symbols !== this.$currentSymbols) {
+    if (!symbols?.length) {
+      this.$breadcrumbsNode.style.display = "none";
+    } else if (symbols !== this.$currentSymbols) {
       this.$currentSymbols = symbols;
 
       function createTreeObject(objects) {
@@ -1106,19 +1176,23 @@ export class AcodeLanguageServerPlugin {
 
       let tree = createTreeObject(symbols);
       this.$breadcrumbsTree = tree;
+      this.$breadcrumbsNode.style.display = "flex";
       this.$buildBreadcrumbsUi(tree);
-      return tree;
+      return true;
     }
+    return false;
   }
 
   $buildBreadcrumbsUi(tree) {
     let breadcrumbNodes = [];
 
+    let currentIndex = breadcrumbNodes.length ? breadcrumbNodes.length - 1 : 0;
+
     let buildBreadcrumbNodes = () => {
       this.$breadcrumbsNode.innerHTML = "";
       for (let object of breadcrumbNodes) {
         let node = tag("span", {
-          className: "breadcrumb-name ace_autocomplete",
+          className: "breadcrumb-name",
           children: [
             tag("i", {
               className:
@@ -1127,7 +1201,8 @@ export class AcodeLanguageServerPlugin {
             }),
             tag("span", {
               textContent: object.name
-            })
+            }),
+            tag("span", { className: "breadcrumb-sep" })
           ]
         });
         node = this.$breadcrumbsNode.appendChild(
@@ -1160,12 +1235,18 @@ export class AcodeLanguageServerPlugin {
         dropdown = tag("ul", {
           className: "dropdown",
           children: object.children.map(child => {
-            let childNode = createNode(child, level + 1);
+            let [childNode, childDropdown] = createNode(child, level + 1);
             let item = tag("li", {
               className: "dropdown-item",
-              children: [childNode]
+              children: [
+                tag("div", {
+                  children: childDropdown
+                    ? [childNode, childDropdown]
+                    : [childNode]
+                })
+              ]
             });
-            if (!childNode.querySelector("ul.dropdown")) {
+            if (!childDropdown) {
               item.classList.add("childless");
             }
             return item;
@@ -1178,8 +1259,8 @@ export class AcodeLanguageServerPlugin {
           if (object.children.length && dropdown) {
             dropdown.classList.toggle("visible");
           }
-          breadcrumbNodes[level] = object;
-          breadcrumbNodes.splice(level + 1);
+          breadcrumbNodes[level - 1] = object;
+          breadcrumbNodes.splice(level);
           buildBreadcrumbNodes();
 
           if (!object.location) return;
@@ -1200,24 +1281,23 @@ export class AcodeLanguageServerPlugin {
           );
         }
       };
-      return node;
+      return [node, dropdown];
     };
 
     this.$mainNode?.remove();
 
     if (tree.length >= 1) {
       if (tree.length === 1) {
-        breadcrumbNodes[0] = tree[0];
+        breadcrumbNodes[currentIndex] = tree[0];
       } else {
-        breadcrumbNodes[0] = {
+        breadcrumbNodes[currentIndex] = {
           ...tree[0],
           children: tree
         };
       }
-      this.$mainNode = createNode(
-        breadcrumbNodes[0],
-        breadcrumbNodes.length - 1
-      );
+      this.$mainNode = tag("div", {
+        children: [createNode(breadcrumbNodes[currentIndex], currentIndex)[1]]
+      });
     }
     this.$mainNode?.classList.add("breadcrumb-dropdown");
     this.$mainNode?.classList.add("ace_autocomplete");
