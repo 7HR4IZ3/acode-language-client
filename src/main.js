@@ -133,9 +133,7 @@ export class AcodeLanguageServerPlugin {
 
     if (window.system?.execute) {
       system
-        .execute("acode-ls", {
-          background: true
-        })
+        .execute("acode-ls", { background: true })
         .then(console.log)
         .catch(console.error);
     }
@@ -364,10 +362,14 @@ export class AcodeLanguageServerPlugin {
 
     this.#setupSidebar();
     this.#setupCommands();
-    this.#setupCodelens();
+    if (this.settings.codelens) {
+      this.#setupCodelens();
+    }
     this.#setupAcodeEvents();
     // this.#setupFooter();
-    this.#setupBreadcrumbs();
+    if (this.settings.breadcrumbs) {
+      this.#setupBreadcrumbs();
+    }
 
     this.$client.registerEditor(editor);
 
@@ -436,6 +438,15 @@ export class AcodeLanguageServerPlugin {
         }
         throw new Error(
           "Invalid url. Use ReconnectingWebSocket directly instead."
+        );
+      },
+
+      getSocketForCommand: (command, args=[]) => {
+        let url =
+          "auto/" + encodeURIComponent(command) +
+          "?args=" + (JSON.stringify(args));
+        return new ReconnectingWebSocket(
+          (this.settings.url + (url))
         );
       },
 
@@ -713,22 +724,24 @@ export class AcodeLanguageServerPlugin {
       }
     });
 
-    let timeout;
-    this.$func = async () => {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-      timeout = setTimeout(async () => {
-        await this.$buildBreadcrumbs();
-        timeout = null;
-      }, 2000);
-    };
+    if (this.settings.breadcrumbs) {
+      let timeout;
+      this.$func = async () => {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+        timeout = setTimeout(async () => {
+          await this.$buildBreadcrumbs();
+          timeout = null;
+        }, 2000);
+      };
 
-    editor.on("change", this.$func);
-    editorManager.on("switch-file", async () =>
-      setTimeout(this.$buildBreadcrumbs.bind(this), 100)
-    );
-    this.$func();
+      editor.on("change", this.$func);
+      editorManager.on("switch-file", async () =>
+        setTimeout(this.$buildBreadcrumbs.bind(this), 100)
+      );
+      this.$func();
+    }
   }
 
   #setupCodelens() {
@@ -736,7 +749,7 @@ export class AcodeLanguageServerPlugin {
       getCodeLens(codeLens => {
         if (!codeLens) return reject("CodeLens not available.");
 
-        let commandId = "acode-ls.executeCodeLens";
+        let commandId = "acodeLsExecuteCodeLens";
         editor.commands.addCommand({
           name: commandId,
           exec: (editor, args) => {
@@ -745,7 +758,7 @@ export class AcodeLanguageServerPlugin {
         });
 
         editor.commands.addCommand({
-          name: "clearCodeLenses",
+          name: "acodeLsClearCodeLenses",
           exec: (editor, args) => {
             codeLens.clear(editor.session);
           }
@@ -777,16 +790,22 @@ export class AcodeLanguageServerPlugin {
                       title:
                         item.command?.tooltip ||
                         item.command?.title ||
-                        (item.data || [])[2] || "Unknown Action",
+                        (item.data || [])[2] ||
+                        "Unknown Action",
                       arguments: [item]
                     }
                   });
+                }
+              } else {
+                let response = await service.findCodeLens?.({ uri });
+                if (response) {
+                  response.map(i => result.push(i));
                 }
               }
             });
             await Promise.all(promises);
 
-            console.log(result)
+            // console.log(result);
             callback(null, result);
           }
         });
@@ -937,7 +956,7 @@ export class AcodeLanguageServerPlugin {
     let cursor = editor.getCursorPosition();
     let position = fromPoint(cursor);
 
-    services.map(service => {
+    services.map(async service => {
       if (service.connection) {
         service.connection
           .sendRequest("textDocument/declaration", {
@@ -956,6 +975,13 @@ export class AcodeLanguageServerPlugin {
               this.#openFile(item.uri, item.range);
             });
           });
+      } else {
+        let response = await service.findCodeLens?.({ uri });
+        if (response) {
+          response.map(item => {
+            this.#openFile(item.uri, item.range);
+          });
+        }
       }
     });
   }
@@ -967,7 +993,7 @@ export class AcodeLanguageServerPlugin {
     let cursor = editor.getCursorPosition();
     let position = fromPoint(cursor);
 
-    services.map(service => {
+    services.map(async service => {
       if (service.connection) {
         service.connection
           .sendRequest("textDocument/references", {
@@ -988,6 +1014,11 @@ export class AcodeLanguageServerPlugin {
             // this.#openFile(item.uri, item.range);
             // });
           });
+      } else {
+        let response = await service.findReferences?.({ uri }, position);
+        if (response) {
+          this.#showReferences(response);
+        }
       }
     });
   }
@@ -999,7 +1030,7 @@ export class AcodeLanguageServerPlugin {
     let cursor = editor.getCursorPosition();
     let position = fromPoint(cursor);
 
-    services.map(service => {
+    services.map(async service => {
       if (service.connection) {
         service.connection
           .sendRequest("textDocument/implementation", {
@@ -1018,6 +1049,11 @@ export class AcodeLanguageServerPlugin {
               this.#openFile(item.uri, item.range);
             });
           });
+      } else if (service.findImplememtations) {
+        let response = await service.findImplememtations({ uri }, position);
+        if (response) {
+          response.map(i => result.push(i));
+        }
       }
     });
   }
@@ -1305,6 +1341,13 @@ export class AcodeLanguageServerPlugin {
 
     return this.$mainNode ? document.body.appendChild(this.$mainNode) : null;
   }
+  
+  getDefaultValue(settingValue, defaultValue=true) {
+    if (typeof settingValue === "undefined") {
+      return defaultValue;
+    }
+    return settingValue;
+  }
 
   get settings() {
     if (!window.acode) {
@@ -1328,6 +1371,8 @@ export class AcodeLanguageServerPlugin {
       // linter: LINTERS[0],
       completionResolve: true,
       replaceCompleters: true,
+      codelens: true,
+      breadcrumbs: true,
       url: "ws://localhost:3030/"
     };
   }
@@ -1339,7 +1384,7 @@ export class AcodeLanguageServerPlugin {
         {
           key: "url",
           text: "Server Url",
-          value: this.settings.url,
+          value: this.getDefaultValue(this.settings.url),
           prompt: "Server URL",
           promptType: "text"
         },
@@ -1353,25 +1398,37 @@ export class AcodeLanguageServerPlugin {
         {
           key: "hover",
           text: "Show Tooltip",
-          checkbox: this.settings.hover,
+          checkbox: this.getDefaultValue(this.settings.hover),
           info: "Show Tooltip on hover or selection"
+        },
+        {
+          key: "breadcrumbs",
+          text: "Breadcrumb Navigation",
+          checkbox: this.getDefaultValue(this.settings.breadcrumbs),
+          info: "Enable breadcrumb navigation.."
+        },
+        {
+          key: "codelens",
+          text: "Code Lens",
+          checkbox: this.getDefaultValue(this.settings.codelens),
+          info: "Enable codelens."
         },
         {
           key: "completion",
           text: "Code Completion",
-          checkbox: this.settings.completion,
+          checkbox: this.getDefaultValue(this.settings.completion),
           info: "Enable code completion."
         },
         {
           key: "completionResolve",
           text: "Doc Tooltip",
-          checkbox: this.settings.completionResolve,
+          checkbox: this.getDefaultValue(this.settings.completionResolve),
           info: "Enable code completion resolve."
         },
         {
           key: "replaceCompleters",
           text: "Replace Completers",
-          checkbox: this.settings.replaceCompleters,
+          checkbox: this.getDefaultValue(this.settings.replaceCompleters),
           info: "Disable the default code completers."
         }
       ],
