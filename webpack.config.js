@@ -4,7 +4,7 @@ const TerserPlugin = require("terser-webpack-plugin");
 const NodePolyfillPlugin = require('node-polyfill-webpack-plugin');
 
 module.exports = (env, options) => {
-  const { mode = "development" } = options;
+  const { mode = "production" } = options;
   const rules = [
     {
       test: /\.m?js$/,

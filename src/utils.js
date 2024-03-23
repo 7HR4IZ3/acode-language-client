@@ -1,3 +1,7 @@
+let loader = acode.require("loader");
+
+let progress = new Map();
+
 export class ReconnectingWebSocket extends EventTarget {
   onopen;
   onclose;
@@ -9,8 +13,8 @@ export class ReconnectingWebSocket extends EventTarget {
     protocols,
     autoConnect = false,
     autoReconnect = true,
-    delay = 1000,
-    autoClose = 300000
+    delay = 1,
+    autoClose = 60 * 3
   ) {
     super();
 
@@ -67,7 +71,7 @@ export class ReconnectingWebSocket extends EventTarget {
 
       this.connection.onclose = event => {
         if (this.autoReconnect && this.$retries < this.$maxRetries) {
-          setTimeout(() => this.connect(), this.delay);
+          setTimeout(() => this.connect(), this.delay * 1000);
         } else {
           this.dispatchEvent(
             new CloseEvent("close", {
@@ -85,12 +89,15 @@ export class ReconnectingWebSocket extends EventTarget {
         this.onerror?.(error);
       };
 
-      if (autoClose && autoClose > 0) {
-        this.$closeTimeout = setTimeout(() => this.close(), this.autoClose);
+      if (this.autoClose && this.autoClose > 0) {
+        this.$closeTimeout = setTimeout(
+          () => this.close(),
+          this.autoClose * 1000
+        );
       }
     } catch {
       if (retry && this.autoReconnect) {
-        setTimeout(() => this.connect(), this.delay);
+        setTimeout(() => this.connect(), this.delay * 1000);
       }
     }
   }
@@ -118,12 +125,15 @@ export class ReconnectingWebSocket extends EventTarget {
 
     if (this.$closeTimeout) {
       clearTimeout(this.$closeTimeout);
-      this.$closeTimeout = setTimeout(() => this.close(), this.autoClose);
+      this.$closeTimeout = setTimeout(
+        () => this.close(),
+        this.autoClose * 1000
+      );
     }
   }
 
-  close() {
-    this.autoReconnect = false;
+  close(autoReconnect = false) {
+    this.autoReconnect = autoReconnect;
     if (this.connection) {
       this.connection.close();
 
@@ -134,6 +144,7 @@ export class ReconnectingWebSocket extends EventTarget {
       });
       this.dispatchEvent(event);
       this.onclose?.(event);
+      this.connection = null;
     }
   }
 }
@@ -322,6 +333,16 @@ export function showToast(message) {
   (window.acode?.require("toast") || console.log)(message);
 }
 
+export function setupProgressHandler(client) {
+  client.connection.onNotification("$/progress", params => {
+    client.ctx.dispatchEvent?.("progress", params);
+  });
+
+  client.connection.onRequest("window/workDoneProgress/create", params => {
+    client.ctx.dispatchEvent?.("create/progress", params);
+  });
+}
+
 export function getCodeLens(callback) {
-  window.require(["ace/ext/code_lens"],  callback);
+  window.require(["ace/ext/code_lens"], callback);
 }

@@ -3,16 +3,20 @@ import * as lsp from "vscode-languageserver-protocol";
 import {
   BrowserMessageReader,
   BrowserMessageWriter,
-  createProtocolConnection,
+  createProtocolConnection
 } from "vscode-languageserver-protocol/browser";
 import {
   LanguageClientConfig,
   LanguageService,
-  ServiceOptions,
+  ServiceOptions
 } from "../types/language-service";
 import { BaseService } from "./base-service";
 import { MessageType } from "../message-types";
-import { commandAsWorker, showToast } from "../../../utils";
+import {
+  commandAsWorker,
+  showToast,
+  setupProgressHandler
+} from "../../../utils";
 
 export class LanguageClient extends BaseService implements LanguageService {
   $service;
@@ -28,48 +32,48 @@ export class LanguageClient extends BaseService implements LanguageService {
     textDocument: {
       hover: {
         dynamicRegistration: true,
-        contentFormat: ["markdown", "plaintext"],
+        contentFormat: ["markdown", "plaintext"]
       },
       synchronization: {
         dynamicRegistration: true,
         willSave: true,
         didSave: true,
-        willSaveWaitUntil: false,
+        willSaveWaitUntil: false
       },
       formatting: {
-        dynamicRegistration: true,
+        dynamicRegistration: true
       },
       codeAction: {
         dynamicRegistration: true,
         dataSupport: true,
-        resolveSupport: { properties: ["edit"] },
+        resolveSupport: { properties: ["edit"] }
       },
       definition: {
         dynamicRegistration: true,
-        linkSupport: false,
+        linkSupport: false
       },
       declaration: {
-        dynamicRegistration: true,
+        dynamicRegistration: true
       },
       references: {
-        dynamicRegistration: true,
+        dynamicRegistration: true
       },
       typeDefinition: {
         dynamicRegistration: true,
-        linkSupport: false,
+        linkSupport: false
       },
       implementation: {
         dynamicRegistration: true,
-        linkSupport: false,
+        linkSupport: false
       },
       rename: {
         dynamicRegistration: true,
         prepareSupport: true,
-        honorsChangeAnnotations: true,
+        honorsChangeAnnotations: true
       },
       rangeFormatting: {
         dynamicRegistration: true,
-        rangesSupport: false,
+        rangesSupport: false
       },
       completion: {
         dynamicRegistration: true,
@@ -78,42 +82,45 @@ export class LanguageClient extends BaseService implements LanguageService {
           commitCharactersSupport: false,
           documentationFormat: ["markdown", "plaintext"],
           deprecatedSupport: true,
-          preselectSupport: false,
+          preselectSupport: false
         },
-        contextSupport: false,
+        contextSupport: false
       },
       signatureHelp: {
         signatureInformation: {
           documentationFormat: ["markdown", "plaintext"],
-          activeParameterSupport: true,
-        },
+          activeParameterSupport: true
+        }
       },
       codeLens: {
-        dynamicRegistration: true,
+        dynamicRegistration: true
       },
       documentHighlight: {
-        dynamicRegistration: true,
+        dynamicRegistration: true
       },
       diagnostic: {
-        dynamicRegistration: true,
+        dynamicRegistration: true
       },
       documentSymbol: {
         dynamicRegistration: true,
-        labelSupport: true,
+        labelSupport: true
       },
       publishDiagnostics: {
         codeDescriptionSupport: true,
-        relatedInformation: true,
+        relatedInformation: true
       },
       inlineCompletion: {
-        dynamicRegistration: true,
-      },
+        dynamicRegistration: true
+      }
     },
     workspace: {
       didChangeConfiguration: {
-        dynamicRegistration: true,
-      },
+        dynamicRegistration: true
+      }
     } as lsp.WorkspaceClientCapabilities,
+    window: {
+      workDoneProgress: true
+    }
   };
   ctx;
 
@@ -149,7 +156,7 @@ export class LanguageClient extends BaseService implements LanguageService {
           this.$connectWorker(
             commandAsWorker(serviceData.command),
             serviceData.initializationOptions
-          )
+          );
         } else {
           throw new Error("No command provided");
         }
@@ -176,35 +183,12 @@ export class LanguageClient extends BaseService implements LanguageService {
       webSocket: this.socket,
       onConnection: (connection: rpc.MessageConnection) => {
         this.$connect(connection, initializationOptions);
-      },
+      }
     });
     if (this.socket.readyState === WebSocket.OPEN) {
       this.socket.dispatchEvent(new Event("open"));
-      this.socket.onopen?.(new Event("open"))
+      this.socket.onopen?.(new Event("open"));
     }
-
-    // this.socket.addEventListener("open", () => {
-    //   this.sendInitialize(initializationOptions);
-
-    //   for (let uri in this.documents) {
-    //     let document = this.documents[uri];
-    //     const textDocumentMessage = {
-    //       textDocument: {
-    //         uri: document.uri,
-    //         version: document.version,
-    //         text: document.getText(),
-    //         languageId: document.languageId,
-    //       },
-    //     };
-
-    //     this.enqueueIfNotConnected(() => {
-    //       this.connection.sendNotification(
-    //         "textDocument/didOpen",
-    //         textDocumentMessage
-    //       );
-    //     });
-    //   }
-    // });
   }
 
   private $connectWorker(
@@ -220,7 +204,7 @@ export class LanguageClient extends BaseService implements LanguageService {
 
   private $connect(connection: any, initializationOptions: any) {
     // console.log(this.isConnected, this.requestsQueue);
-    
+
     if (this.connection) {
       this.connection.dispose();
     }
@@ -234,8 +218,8 @@ export class LanguageClient extends BaseService implements LanguageService {
               uri: document.uri,
               version: document.version,
               text: document.getText(),
-              languageId: document.languageId,
-            },
+              languageId: document.languageId
+            }
           };
 
           this.connection.sendNotification(
@@ -252,13 +236,15 @@ export class LanguageClient extends BaseService implements LanguageService {
 
     this.sendInitialize(initializationOptions);
 
+    setupProgressHandler(this);
+
     this.connection.onNotification(
       "textDocument/publishDiagnostics",
       (result: lsp.PublishDiagnosticsParams) => {
         let postMessage = {
           type: MessageType.validate,
-          sessionId: result.uri.replace(/^file:\/{2,3}/, "/"),
-          value: result.diagnostics,
+          sessionId: result.uri,
+          value: result.diagnostics
         };
         this.$diagnostics = result.diagnostics;
         this.ctx.postMessage(postMessage);
@@ -307,7 +293,19 @@ export class LanguageClient extends BaseService implements LanguageService {
       }
     );
 
-    this.connection.onRequest("client/registerCapability", (params) => {
+    // this.connection.onRequest("window/workDoneProgress/create", params => {
+    //   let targetLoader = loader.create("Lua Server Progress");
+    //   progress.set(params.token);
+    // });
+
+    // this.connection.onRequest("window/workDoneProgress/cancel", params => {
+    //   let targetLoader = progress.get(params.token);
+    //   if (targetLoader) {
+    //     targetLoader.hide();
+    //   }
+    // });
+
+    this.connection.onRequest("client/registerCapability", params => {
       // console.log(params);
       for (let { method } of params.registrations) {
         let key,
@@ -322,7 +320,7 @@ export class LanguageClient extends BaseService implements LanguageService {
       }
     });
 
-    this.connection.onError((e) => {
+    this.connection.onError(e => {
       throw e;
     });
 
@@ -359,15 +357,19 @@ export class LanguageClient extends BaseService implements LanguageService {
   addDocument(document: lsp.TextDocumentItem) {
     super.addDocument(document);
     const textDocumentMessage: lsp.DidOpenTextDocumentParams = {
-      textDocument: document,
+      textDocument: {
+        ...document,
+        version: 1
+      }
     };
 
-    this.enqueueIfNotConnected(() =>
+    this.enqueueIfNotConnected(() => {
       this.connection.sendNotification(
         "textDocument/didOpen",
         textDocumentMessage
-      )
-    );
+      );
+      this.ctx.dispatchEvent?.("addDocument", textDocumentMessage);
+    });
   }
 
   enqueueIfNotConnected(callback: () => void) {
@@ -383,8 +385,8 @@ export class LanguageClient extends BaseService implements LanguageService {
     this.enqueueIfNotConnected(() =>
       this.connection.sendNotification("textDocument/didClose", {
         textDocument: {
-          uri: document.uri,
-        },
+          uri: document.uri
+        }
       } as lsp.DidCloseTextDocumentParams)
     );
   }
@@ -417,12 +419,14 @@ export class LanguageClient extends BaseService implements LanguageService {
       initializationOptions: initializationOptions,
       processId: null,
       rootUri: rootUri || "", //TODO: this.documentInfo.rootUri
-      workspaceFolders: folders,
+      workspaceFolders: folders
     };
-    
-    let mode = this.serviceData.options?.alias || this.serviceData.modes.split("|")[0];
+
+    let mode =
+      this.serviceData.options?.alias || this.serviceData.modes.split("|")[0];
 
     showToast("Initializing " + mode + " language server...");
+    this.ctx.dispatchEvent?.("initialize", this);
 
     this.connection
       .sendRequest("initialize", message)
@@ -432,13 +436,14 @@ export class LanguageClient extends BaseService implements LanguageService {
           params.capabilities as lsp.ServerCapabilities;
 
         showToast("Initialized " + mode + " language server.");
+        this.ctx.dispatchEvent?.("initialized", { lsp: this, params });
 
         this.connection.sendNotification("initialized", {}).then(() => {
           this.connection.sendNotification("workspace/didChangeConfiguration", {
-            settings: {},
+            settings: {}
           });
 
-          this.requestsQueue.forEach((requestCallback) => requestCallback());
+          this.requestsQueue.forEach(requestCallback => requestCallback());
           this.requestsQueue = [];
         });
       });
@@ -467,9 +472,9 @@ export class LanguageClient extends BaseService implements LanguageService {
     const textDocumentChange: lsp.DidChangeTextDocumentParams = {
       textDocument: {
         uri: identifier.uri,
-        version: identifier.version,
+        version: identifier.version
       } as lsp.VersionedTextDocumentIdentifier,
-      contentChanges: deltas,
+      contentChanges: deltas
     };
     this.connection.sendNotification(
       "textDocument/didChange",
@@ -485,9 +490,9 @@ export class LanguageClient extends BaseService implements LanguageService {
     const textDocumentChange: lsp.DidChangeTextDocumentParams = {
       textDocument: {
         uri: identifier.uri,
-        version: identifier.version,
+        version: identifier.version
       } as lsp.VersionedTextDocumentIdentifier,
-      contentChanges: [{ text: value }],
+      contentChanges: [{ text: value }]
     };
     this.connection.sendNotification(
       "textDocument/didChange",
@@ -504,9 +509,9 @@ export class LanguageClient extends BaseService implements LanguageService {
     }
     let options: lsp.TextDocumentPositionParams = {
       textDocument: {
-        uri: document.uri,
+        uri: document.uri
       },
-      position: position,
+      position: position
     };
     return this.connection.sendRequest(
       "textDocument/hover",
@@ -527,9 +532,9 @@ export class LanguageClient extends BaseService implements LanguageService {
 
     let options: lsp.CompletionParams = {
       textDocument: {
-        uri: document.uri,
+        uri: document.uri
       },
-      position: position,
+      position: position
     };
     return this.connection.sendRequest(
       "textDocument/completion",
@@ -575,9 +580,9 @@ export class LanguageClient extends BaseService implements LanguageService {
     if (!this.serviceCapabilities.documentRangeFormattingProvider) {
       let options: lsp.DocumentFormattingParams = {
         textDocument: {
-          uri: document.uri,
+          uri: document.uri
         },
-        options: format,
+        options: format
       };
       return this.connection.sendRequest(
         "textDocument/formatting",
@@ -586,10 +591,10 @@ export class LanguageClient extends BaseService implements LanguageService {
     } else {
       let options: lsp.DocumentRangeFormattingParams = {
         textDocument: {
-          uri: document.uri,
+          uri: document.uri
         },
         options: format,
-        range: range,
+        range: range
       };
       return this.connection.sendRequest(
         "textDocument/rangeFormatting",
@@ -605,7 +610,7 @@ export class LanguageClient extends BaseService implements LanguageService {
       return;
     }
     const configChanges: lsp.DidChangeConfigurationParams = {
-      settings: options,
+      settings: options
     };
     this.connection.sendNotification(
       "workspace/didChangeConfiguration",
@@ -621,9 +626,9 @@ export class LanguageClient extends BaseService implements LanguageService {
     if (!this.serviceCapabilities?.documentHighlightProvider) return [];
     let options: lsp.DocumentHighlightParams = {
       textDocument: {
-        uri: document.uri,
+        uri: document.uri
       },
-      position: position,
+      position: position
     };
     return this.connection.sendRequest(
       "textDocument/documentHighlight",
@@ -639,9 +644,9 @@ export class LanguageClient extends BaseService implements LanguageService {
     if (!this.serviceCapabilities?.signatureHelpProvider) return null;
     let options: lsp.SignatureHelpParams = {
       textDocument: {
-        uri: document.uri,
+        uri: document.uri
       },
-      position: position,
+      position: position
     };
     return this.connection.sendRequest(
       "textDocument/signatureHelp",

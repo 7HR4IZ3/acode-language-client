@@ -35,7 +35,8 @@ export class MessageController extends EventEmitter implements IMessageControlle
     init(sessionId: string, document: Ace.Document, mode: string, options: any, initCallback: (capabilities) => void, validationCallback: (annotations: lsp.Diagnostic[]) => void): void {
         this.on(MessageType.validate.toString() + "-" + sessionId, validationCallback);
 
-        this.postMessage(new InitMessage(sessionId, document.getValue(), document["version"], mode, options), initCallback);
+        this.postMessage(new InitMessage(sessionId, document.getValue(),
+        document["version"] || 1, mode, options), initCallback);
     }
 
     doValidation(sessionId: string, callback?: (annotations: lsp.Diagnostic[]) => void) {

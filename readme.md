@@ -3,7 +3,19 @@ _____
 
 > **Note** This plugin is meant to replace `Acode Language Servers` plugin. Uninstall before installing this plugin
 
+> **WARNING** Please update your server to the npm version.
+
+> **WARNING** Please update your server to v1.0.6 or higher for this plugin to work properly.
+
 Acode plugin that adds support for language servers.
+
+_____
+## Udate your server
+
+To update the server from npm run
+```bash
+npm update -g acode-lsp
+```
 
 _____
 ## Supported Features
@@ -19,9 +31,26 @@ _____
 - Supports code lens
 
 ___
+## New in v1.0.4
+- Support for bottom footer showing server info
+- Fixed major bug issue
+
 ## New in v1.0.2
 - Support for breadcrumb navigation.
 - Added support for code lens.
+
+_____
+## To setup server
+
+To install the server from npm run
+```bash
+npm install -g acode-lsp
+```
+
+To run the server use
+```bash
+acode-ls
+```
 
 _____
 ## Supported Languages
@@ -82,10 +111,9 @@ node server/server.mjs
 To install the server run the following command:
 
 ``` bash
-git clone https://github.com/7HR4IZ3/acode-language-server.git
-cd acode-language-server
-npm install
-node server.mjs
+npm install -g acode-lsp
+
+acode-ls
 ```
 _____
 ### API
@@ -114,7 +142,9 @@ class TypescriptPlugin {
 
   setupLangaugeClient(acodeLanguageClient) {
     // Get Socket for typescript language server
-    let socket = acodeLanguageClient.getSocket("server/typescript");
+    let socket = acodeLanguageClient.getSocketForCommand(
+      "typescript-language-server", ["--stdio"]
+    );
 
     // Create client for server
     let typescriptClient = new acodeLanguageClient.LanguageClient({
@@ -163,6 +193,13 @@ Use `server/<language>` the language is in:
 
 Else use `auto/<command_to_run>?args=<command_args>` to execute an already
 installed language server by command.
+
+_____
+
+#### `.getSocketForCommand(command: string, args: Array)`
+
+This function returns a `ReconnectingWebsocket` instance.
+It servers as a helper for using `auto/<command>` server path.
 
 _____
 
@@ -221,7 +258,6 @@ To setup and run this plugin locally:
 
 _____
 ## Contributing
-
 
 Users can also add other language servers and send a pull request so they are
 added to the plugin.

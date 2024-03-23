@@ -344,7 +344,7 @@ export class ServiceManager {
     if (serviceInstances.length === 0) return;
     let documentItem = {
       uri: documentIdentifier.uri,
-      version: documentIdentifier.version,
+      version: documentIdentifier.version || 1,
       languageId: mode,
       text: documentValue
     };

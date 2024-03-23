@@ -3,3 +3,5 @@ yarn.lock
 dist.zip
 dist
 server
+*.rar
+stickScroll.js

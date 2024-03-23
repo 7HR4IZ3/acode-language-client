@@ -29,4 +29,5 @@ export declare function getFolderName(sessionId: string): (string | undefined)
 export declare function getExtension(fileName: string): string
 export declare function commandAsWorker(command: string): Worker
 export declare function showToast(message: string): void
+export declare function setupProgressHandler(client: any): void
 export declare function getCodeLens(callback: ((codelens: any) => void)): void

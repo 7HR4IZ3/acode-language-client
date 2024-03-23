@@ -16,9 +16,6 @@ import {
 import { BaseService } from "./ace-linters/src/services/base-service";
 import { LanguageClient } from "./ace-linters/src/services/language-client.ts";
 
-import { SymbolKind } from "vscode-languageserver-types";
-
-// import "./style.css"
 
 /**
  * @typedef {object} EditorManager
@@ -27,10 +24,10 @@ import { SymbolKind } from "vscode-languageserver-types";
 
 /** @type {EditorManager} */
 let { editor } = editorManager;
-// const LINTERS = ["pylint", "pyflakes", "mypy"];
 
 let defaultServices = {};
 var Range = ace.require("ace/range").Range;
+let commandId = "acodeLsExecuteCodeLens";
 
 let symbolKindToClass = {
   1: "file",
@@ -60,8 +57,8 @@ class CustomService extends BaseService {
 
   async doComplete(document, position) {
     let handlers = this.$handlers["completion"];
+    let allCompletions = [];
     if (handlers) {
-      let allCompletions = [];
       for (let handler of handlers) {
         let completions = await handler.bind(this)(document, position);
         if (completions) {
@@ -69,13 +66,13 @@ class CustomService extends BaseService {
         }
       }
     }
-    return null;
+    return allCompletions;
   }
 
   async doValidation(document) {
     let handlers = this.$handlers["validation"];
+    let allValidations = [];
     if (handlers) {
-      let allValidations = [];
       for (let handler of handlers) {
         let completions = await handler.bind(this)(document);
         if (completions) {
@@ -83,21 +80,38 @@ class CustomService extends BaseService {
         }
       }
     }
-    return null;
+    return allValidations;
   }
 
   async doHover(document) {
     let handlers = this.$handlers["hover"];
     if (handlers) {
-      let allValidations = [];
+      let allHovers = [];
       for (let handler of handlers) {
         let completions = await handler.bind(this)(document);
         if (completions) {
-          completions.map(item => allValidations.push(item));
+          completions.map(item => allHovers.push(item));
         }
       }
     }
-    return null;
+    return allHovers;
+  }
+
+  async doCodeLens() {
+    let handlers = this.$handlers["codeLens"];
+    let allCodeLens = [];
+    if (handlers) {
+      for (let handler of handlers) {
+        let completions = await handler.bind(this)();
+        if (completions) {
+          completions.map(item => {
+            item.command && (iten.command.id = commandId);
+            allCodeLens.push(item);
+          });
+        }
+      }
+    }
+    return allCodeLens;
   }
 
   addHandler(target, handler) {
@@ -110,19 +124,26 @@ class CustomService extends BaseService {
  * @param {string} mode
  * @returns {CustomService}
  */
-function getDefaultService(mode) {
-  return (defaultServices[mode] ??= new CustomService(mode));
+function get(mode) {
+  return (s[mode] ??= new CustomService(mode));
 }
+
+let defaultService = new CustomService("any");
 
 export class AcodeLanguageServerPlugin {
   $rootUri;
   $folders;
+  $progressNodes;
+  $breadcrumbsTree;
+  $breadcrumbsNodes;
 
-  async init($page) {
+  async init($page, justInstalled) {
     this.$page = $page;
     this.$logs = [];
     this.$sockets = {};
     this.$currentSymbols = null;
+    this.$serverInfos = new Map();
+    this.$progressNodes = new Map();
 
     document.head.appendChild(
       tag("link", {
@@ -131,11 +152,34 @@ export class AcodeLanguageServerPlugin {
       })
     );
 
-    if (window.system?.execute) {
-      system
-        .execute("acode-ls", { background: true })
-        .then(console.log)
-        .catch(console.error);
+    let pty = window.acode?.require("pty");
+    if (typeof pty !== "undefined") {
+      let commandPath = await pty.host.getCommandPath("acode-ls", "acode-ls");
+      if (justInstalled && !commandPath) {
+        let installLoader = acode.require("loader").create(
+          "Installing acode language server",
+          `Running 'npm install -g acode-lsp'`
+        );
+        installLoader.show();
+
+        try {
+          await pty.host.run("npm", ["install", "-g", "acode-lsp"], {
+            background: false,
+            sessionAction: 0
+          });
+          installLoader.setMessage("Server sucessfully installed");
+        } catch (error) {
+          alert(
+            "PtyError",
+            "Server install failed. Try manually in termux."
+          );
+          console.error(error?.toString?.() || error);
+        } finally {
+          setTimeout(() => installLoader.destroy(), 2000);
+        }
+      }
+
+      this.$conn = await pty.host.run({ command: "acode-ls" });
     }
 
     await this.setup();
@@ -169,7 +213,13 @@ export class AcodeLanguageServerPlugin {
         serviceTarget.dispatchEvent(
           new MessageEvent("message", { data: message })
         );
-      }
+      },
+      dispatchEvent: (event, data) =>
+        providerTarget.dispatchEvent(
+          new CustomEvent(event, {
+            detail: data
+          })
+        )
     });
 
     this.$manager.registerService("html", {
@@ -226,16 +276,6 @@ export class AcodeLanguageServerPlugin {
       workspaceFolders: () => this.#getFolders()
     });
 
-    // this.$manager.registerService("javascript", {
-    //   features: { signatureHelp: false, documentHighlight: false },
-    //   module: () =>
-    //     import("./ace-linters/src/services/javascript/javascript-service.ts"),
-    //   rootUri: () => this.#getRootUri(),
-    //   className: "JavascriptService",
-    //   modes: "javascript",
-    //   workspaceFolders: () => this.#getFolders()
-    // });
-
     this.$manager.registerService("yaml", {
       features: { signatureHelp: false, documentHighlight: false },
       module: () => import("./ace-linters/src/services/yaml/yaml-service.ts"),
@@ -263,66 +303,6 @@ export class AcodeLanguageServerPlugin {
       workspaceFolders: () => this.#getFolders()
     });
 
-    // this.$manager.registerServer("python", {
-    //   modes: "python",
-    //   type: "socket",
-    //   rootUri: () => this.#getRootUri(),
-    //   workspaceFolders: () => this.#getFolders(),
-    //   module: () => import("./ace-linters/src/services/language-client.ts"),
-    //   socket: new ReconnectingWebSocket(this.settings.url + "server/python")
-    //   // socket: new ReconnectingWebSocket("ws://localhost:3031"),
-    // });
-
-    // this.$manager.registerServer("cpp", {
-    //   modes: "c_cpp",
-    //   type: "socket",
-    //   rootUri: () => this.#getRootUri(),
-    //   workspaceFolders: () => this.#getFolders(),
-    //   module: () => import("./ace-linters/src/services/language-client.ts"),
-    //   socket: new ReconnectingWebSocket(this.settings.url + "server/cpp")
-    // });
-
-    // this.$manager.registerServer("vue", {
-    //   modes: "html",
-    //   type: "socket",
-    //   rootUri: () => this.#getRootUri(),
-    //   workspaceFolders: () => this.#getFolders(),
-    //   initializationOptions: { cleanPendingValidation: true },
-    //   module: () => import("./ace-linters/src/services/language-client.ts"),
-    //   socket: new ReconnectingWebSocket(this.settings.url + "server/vue")
-    // });
-
-    // this.$manager.registerServer("java", {
-    //   modes: "java",
-    //   type: "socket",
-    //   rootUri: () => this.#getRootUri(),
-    //   workspaceFolders: () => this.#getFolders(),
-    //   module: () => import("./ace-linters/src/services/language-client.ts"),
-    //   socket: new ReconnectingWebSocket(this.settings.url + "server/java")
-    // });
-
-    // this.$manager.registerServer("typescript", {
-    //   type: "socket",
-    //   modes: "typescript|javascript|tsx|jsx",
-    //   rootUri: () => this.#getRootUri(),
-    //   workspaceFolders: () => this.#getFolders(),
-    //   module: () => import("./ace-linters/src/services/language-client.ts"),
-    //   initializationOptions: { cancellationPipeName: "typescript" },
-    //   socket: new ReconnectingWebSocket(this.settings.url + "server/typescript")
-    // });
-
-    // this.$manager.registerServer("rust", {
-    //   type: "socket",
-    //   modes: "rust",
-    //   rootUri: () => this.#getRootUri(),
-    //   workspaceFolders: () => this.#getFolders(),
-    //   module: () => import("./ace-linters/src/services/language-client.ts"),
-    //   initializationOptions: { cancellationPipeName: "rust" },
-    //   socket: new ReconnectingWebSocket(
-    //     this.settings.url + "auto/rust-analyzer"
-    //   )
-    // });
-
     this.$client = LanguageProvider.create({
       addEventListener: (...args) => serviceTarget.addEventListener(...args),
       postMessage(message) {
@@ -334,27 +314,11 @@ export class AcodeLanguageServerPlugin {
 
     if (window.acode && this.settings.format) {
       acode.registerFormatter(
-        "Acode Language Servers",
+        "Acode Language Client",
         ["html", "css", "scss", "less", "lua", "xml", "yaml", "json", "json5"],
-        () => {
-          this.$client.format();
-        }
+        () => this.$client.format()
       );
     }
-
-    // this.$client.setGlobalOptions("typescript", {
-    //   parserOptions: { sourceType: "module" },
-    //   errorCodesToIgnore: [
-    //     "2304",
-    //     "2732",
-    //     "2554",
-    //     "2339",
-    //     "2580",
-    //     "2307",
-    //     "2540"
-    //   ],
-    //   ...(this.settings.options?.typescript || {})
-    // });
 
     this.$client.setGlobalOptions("", {
       ...(this.settings.options?.global || {})
@@ -366,7 +330,7 @@ export class AcodeLanguageServerPlugin {
       this.#setupCodelens();
     }
     this.#setupAcodeEvents();
-    // this.#setupFooter();
+    this.#setupFooter();
     if (this.settings.breadcrumbs) {
       this.#setupBreadcrumbs();
     }
@@ -376,6 +340,16 @@ export class AcodeLanguageServerPlugin {
     if (this.settings.replaceCompleters) {
       this.$completers = editor.completers.splice(1, 2);
     }
+
+    let wrap = (mode, callback) => {
+      return async (...args) => {
+        let activeMode = editor.session.$modeId.substring(9);
+        if (mode.split("|").includes(activeMode)) {
+          return await callback(...args);
+        }
+        return [];
+      };
+    };
 
     this.$exports = {
       BaseService,
@@ -388,6 +362,8 @@ export class AcodeLanguageServerPlugin {
       },
 
       format: () => this.$client.format(),
+      dispatchEvent: (name, data) =>
+        providerTarget.dispatchEvent(new CustomEvent(name, { detail: data })),
 
       registerService: (mode, client, options) => {
         if (Array.isArray(mode)) {
@@ -417,9 +393,17 @@ export class AcodeLanguageServerPlugin {
 
           if (client instanceof LanguageClient) {
             client.enqueueIfNotConnected(() => {
-              client.connection.onNotification("language/details", params => {
-                console.log(params);
-              });
+              client.connection.onNotification(
+                "$/typescriptVersion",
+                params => {
+                  let serverInfo = {
+                    name: "typescript",
+                    version: params.version
+                  };
+                  this.$serverInfos.set(mode, serverInfo);
+                  this.#setServerInfo(serverInfo);
+                }
+              );
             });
           }
 
@@ -434,45 +418,154 @@ export class AcodeLanguageServerPlugin {
 
       getSocket: url => {
         if (url.startsWith("server") || url.startsWith("auto")) {
-          return new ReconnectingWebSocket(this.settings.url + url);
+          return new ReconnectingWebSocket(
+            this.settings.url + url,
+            null,
+            false,
+            true,
+            this.settings.reconnectDelay,
+            this.settings.closeTimeout
+          );
         }
         throw new Error(
           "Invalid url. Use ReconnectingWebSocket directly instead."
         );
       },
 
-      getSocketForCommand: (command, args=[]) => {
+      getSocketForCommand: (command, args = []) => {
         let url =
-          "auto/" + encodeURIComponent(command) +
-          "?args=" + (JSON.stringify(args));
+          "auto/" +
+          encodeURIComponent(command) +
+          "?args=" +
+          JSON.stringify(args);
         return new ReconnectingWebSocket(
-          (this.settings.url + (url))
+          this.settings.url + url,
+          null,
+          false,
+          true,
+          this.settings.reconnectDelay,
+          this.settings.closeTimeout
         );
       },
 
       provideHover(mode, callback) {
-        let service = getDefaultService(mode);
-        return service.addHandler("hover", callback);
+        return defaultService.addHandler("hover", wrap(mode, callback));
       },
       provideCodeLens(mode, callback) {
-        let service = getDefaultService(mode);
-        return service.addHandler("codeLens", callback);
+        return defaultService.addHandler("codeLens", wrap(mode, callback));
       },
       provideCompletion(mode, callback) {
-        let service = getDefaultService(mode);
-        return service.addHandler("completion", callback);
+        return defaultService.addHandler("completion", wrap(mode, callback));
       },
       provideCodeAction(mode, callback) {
-        let service = getDefaultService(mode);
-        return service.addHandler("codeAction", callback);
+        return defaultService.addHandler("codeAction", wrap(mode, callback));
       },
       provideValidation(mode, callback) {
-        let service = getDefaultService(mode);
-        return service.addHandler("validation", callback);
+        return defaultService.addHandler("validation", wrap(mode, callback));
       }
     };
 
     window.acode?.define("acode-language-client", this.$exports);
+
+    providerTarget.addEventListener("initialized", ({ detail }) => {
+      // console.log("Initialized:", detail);
+      let mode =
+        detail.lsp.serviceData.options?.alias ||
+        detail.lsp.serviceData.modes.split("|")[0];
+
+      if (!detail.params.serverInfo) return;
+
+      this.$serverInfos.set(mode, detail.params.serverInfo);
+      this.#setServerInfo(detail.params.serverInfo);
+    });
+
+    editorManager.on("switch-file", async () => {
+      let mode = editorManager.editor.session.$modeId.substring(9);
+      let serverInfo = this.$serverInfos.get(mode);
+      if (!serverInfo) {
+        for (let [key, value] of this.$serverInfos) {
+          if (key.split("|").includes(mode)) {
+            serverInfo = value;
+            break;
+          }
+        }
+      }
+
+      if (serverInfo) {
+        this.#setServerInfo(serverInfo);
+      } else {
+        let node = this.$footer.querySelector(".server-info");
+        node.style.display = "none";
+      }
+    });
+
+    let titles = new Map();
+    providerTarget.addEventListener("progress", ({ detail }) => {
+      let progress = this.#getProgress(detail.token);
+      if (progress) {
+        if (detail.value.kind === "begin") {
+          titles.set(detail.token, detail.title);
+        } else if (detail.value.kind === "report") {
+          progress.show();
+        } else if (detail.value.kind === "end") {
+          titles.delete(detail.token);
+          return progress.remove();
+        }
+
+        progress.setTitle(titles.get(detail.token));
+
+        if (detail.value.message) {
+          let percentage = detail.value.percentage;
+          progress.setMessage(
+            detail.value.message +
+              (percentage ? " <br/>(" + String(percentage) + "%)" : "")
+          );
+        }
+      }
+    });
+
+    // providerTarget.addEventListener("create/progress", ({ detail }) => {});
+    // providerTarget.addEventListener("initialized", ({ detail }) => {})
+  }
+
+  #getProgress(token) {
+    let node = this.$footer.querySelector("div#token-" /*+ token*/);
+    if (!node) {
+      node = this.$footer.appendChild(
+        tag("div", {
+          id: "token-" /* + token*/,
+          children: [
+            tag("span", {
+              className: "title",
+              textContent: ""
+            })
+          ]
+        })
+      );
+    }
+
+    return {
+      show: () => {
+        node.style.display = "block";
+      },
+      remove: () => {
+        node.style.display = "none";
+      },
+      setTitle: title => {
+        if (!title) return;
+        node.querySelector("span.title").innerHTML = title;
+      },
+      setMessage: message => {
+        if (!message) return;
+        node.querySelector("span.title").innerHTML = message;
+      }
+    };
+  }
+
+  #setServerInfo({ name, version }) {
+    let node = this.$footer.querySelector(".server-info");
+    node.innerHTML = `${name} (${version})`;
+    node.style.display = "block";
   }
 
   setDefaultFeaturesState(serviceFeatures) {
@@ -542,7 +635,7 @@ export class AcodeLanguageServerPlugin {
       let openfolder = acode.require("openfolder");
       let folder = openfolder.find(editorManager.activeFile.uri);
       if (folder?.url) {
-        return formatUrl(folder.url, false);
+        return "file://" + formatUrl(folder.url, false);
       }
     }
 
@@ -551,7 +644,7 @@ export class AcodeLanguageServerPlugin {
     let folders = this.#getFolders();
 
     if (folders?.length) {
-      return formatUrl(folders[0].url, false);
+      return folders[0].url;
     } else {
       // For testing in browser on pc
       return "C:/Users/HP/Desktop_Files/files/programming/javascript/acode plugins/acode-language-client";
@@ -571,8 +664,8 @@ export class AcodeLanguageServerPlugin {
 
     this.$folders = folders.map(item => ({
       name: item.opts.name,
-      uri: formatUrl(item.url, false),
-      url: formatUrl(item.url, false)
+      uri: "file://" + formatUrl(item.url, false),
+      url: "file://" + formatUrl(item.url, false)
     }));
     return this.$folders;
   }
@@ -640,11 +733,9 @@ export class AcodeLanguageServerPlugin {
       let services = this.#getServices(file.session);
       try {
         services.map(service => {
-          service.serviceInstance?.removeDocument(
-            service.serviceInstance.getDocument(
-              this.$client.$getFileName(file.session)
-            )
-          );
+          service.serviceInstance?.removeDocument({
+            uri: this.$client.$getFileName(file.session)
+          });
         });
       } catch (e) {
         console.error(e);
@@ -655,11 +746,9 @@ export class AcodeLanguageServerPlugin {
       let services = this.#getServices(file.session);
       try {
         services.map(service => {
-          service.serviceInstance?.removeDocument(
-            service.serviceInstance.getDocument(
-              this.$client.$getFileName(file.session)
-            )
-          );
+          service.serviceInstance?.removeDocument({
+            uri: this.$client.$getFileName(file.session)
+          });
         });
       } catch (e) {
         console.error(e);
@@ -683,8 +772,8 @@ export class AcodeLanguageServerPlugin {
                 removed: [
                   {
                     name: folder.opts?.name,
-                    uri: formatUrl(folder.url, false),
-                    url: formatUrl(folder.url, false)
+                    uri: "file://" + formatUrl(folder.url, false),
+                    url: "file://" + formatUrl(folder.url, false)
                   }
                 ]
               }
@@ -711,8 +800,8 @@ export class AcodeLanguageServerPlugin {
                 added: [
                   {
                     name: folder.opts?.name,
-                    uri: formatUrl(folder.url, false),
-                    url: formatUrl(folder.url, false)
+                    uri: "file://" + formatUrl(folder.url, false),
+                    url: "file://" + formatUrl(folder.url, false)
                   }
                 ]
               }
@@ -738,7 +827,10 @@ export class AcodeLanguageServerPlugin {
 
       editor.on("change", this.$func);
       editorManager.on("switch-file", async () =>
-        setTimeout(this.$buildBreadcrumbs.bind(this), 100)
+        setTimeout(
+          this.$buildBreadcrumbs.bind(this),
+          this.settings.breadcrumbTimeout
+        )
       );
       this.$func();
     }
@@ -749,11 +841,14 @@ export class AcodeLanguageServerPlugin {
       getCodeLens(codeLens => {
         if (!codeLens) return reject("CodeLens not available.");
 
-        let commandId = "acodeLsExecuteCodeLens";
         editor.commands.addCommand({
           name: commandId,
           exec: (editor, args) => {
             console.log("Executing:", args);
+            let item = args[0];
+            if (item.exec) {
+              item.exec();
+            }
           }
         });
 
@@ -771,7 +866,7 @@ export class AcodeLanguageServerPlugin {
               capabilities => capabilities.codeLensProvider
             ).map(service => service.serviceInstance);
             let uri = this.$client.$getFileName(editor.session);
-            let result = [];
+            let result = [...(await defaultService.doCodeLens())];
 
             let promises = services.map(async service => {
               if (service.connection) {
@@ -779,7 +874,8 @@ export class AcodeLanguageServerPlugin {
                   "textDocument/codeLens",
                   { textDocument: { uri } }
                 );
-                console.log("CodeLens:", response);
+                // console.log("CodeLens:", response);
+                if (!response) return;
                 for (let item of response) {
                   if (!item.command && !item.data) continue;
 
@@ -797,7 +893,7 @@ export class AcodeLanguageServerPlugin {
                   });
                 }
               } else {
-                let response = await service.findCodeLens?.({ uri });
+                let response = await service.doCodeLens?.({ uri });
                 if (response) {
                   response.map(i => result.push(i));
                 }
@@ -805,7 +901,6 @@ export class AcodeLanguageServerPlugin {
             });
             await Promise.all(promises);
 
-            // console.log(result);
             callback(null, result);
           }
         });
@@ -819,7 +914,18 @@ export class AcodeLanguageServerPlugin {
 
     this.$footer = footer.appendChild(
       tag("div", {
-        className: "button-container"
+        className: "button-container",
+        style: {
+          display: "flex",
+          flexDirection: "row",
+          justifyContent: "space-around",
+          alignItems: "center"
+        },
+        children: [
+          tag("span", {
+            className: "server-info"
+          })
+        ]
       })
     );
   }
@@ -1173,8 +1279,6 @@ export class AcodeLanguageServerPlugin {
   }
 
   async $buildBreadcrumbs() {
-    this.$breadcrumbsNode.innerHTML = "";
-
     let symbols = await this.getDocumentSymbols();
 
     if (!symbols?.length) {
@@ -1204,13 +1308,26 @@ export class AcodeLanguageServerPlugin {
         }
 
         // Find the root nodes (objects with no parent)
-        const rootNodes = objects.filter(object => !object.containerName);
+        let url = acode.require("url");
+        let filename = url.basename(editorManager.activeFile.uri);
+
+        const rootNodes = objects.filter(object => {
+          if (!object.containerName) {
+            return true;
+          } else {
+            // Java jdtls root node has the containerName set to the filename.
+            return object.containerName === filename;
+          }
+        });
 
         // Build the tree object and return it
         return rootNodes.map(node => buildNode(node));
       }
 
-      let tree = createTreeObject(symbols);
+      let tree =
+        typeof symbols[0]?.children !== "undefined"
+          ? symbols
+          : createTreeObject(symbols);
       this.$breadcrumbsTree = tree;
       this.$breadcrumbsNode.style.display = "flex";
       this.$buildBreadcrumbsUi(tree);
@@ -1221,7 +1338,6 @@ export class AcodeLanguageServerPlugin {
 
   $buildBreadcrumbsUi(tree) {
     let breadcrumbNodes = [];
-
     let currentIndex = breadcrumbNodes.length ? breadcrumbNodes.length - 1 : 0;
 
     let buildBreadcrumbNodes = () => {
@@ -1267,7 +1383,7 @@ export class AcodeLanguageServerPlugin {
           ]
         });
 
-      if (object.children.length) {
+      if (object.children?.length) {
         dropdown = tag("ul", {
           className: "dropdown",
           children: object.children.map(child => {
@@ -1290,6 +1406,7 @@ export class AcodeLanguageServerPlugin {
         });
         node.appendChild(dropdown);
       }
+
       node.onclick = ({ target }) => {
         if (target === node || target.parentElement === node) {
           if (object.children.length && dropdown) {
@@ -1301,17 +1418,21 @@ export class AcodeLanguageServerPlugin {
 
           if (!object.location) return;
 
-          editor.scrollToLine(object.location.range.start.line - 10);
+          let start = object.location.range.start;
+          let end = object.location.range.end;
 
-          let start = object.location.range.start.line;
-          let end = object.location.range.end.line;
+          editor.scrollToLine(start.line - 10);
+          editorManager.editor.session.selection.moveCursorTo(
+            start.line,
+            start.character
+          );
 
           if (this.$currentRange !== undefined) {
             editor.session.removeMarker(this.$currentRange);
           }
 
           this.$currentRange = editor.session.addMarker(
-            new Range(start, 0, end, 0),
+            new Range(start.line, 0, end.line, 0),
             "ace_selected-word",
             "fullLine"
           );
@@ -1341,8 +1462,8 @@ export class AcodeLanguageServerPlugin {
 
     return this.$mainNode ? document.body.appendChild(this.$mainNode) : null;
   }
-  
-  getDefaultValue(settingValue, defaultValue=true) {
+
+  getDefaultValue(settingValue, defaultValue = true) {
     if (typeof settingValue === "undefined") {
       return defaultValue;
     }
@@ -1373,6 +1494,9 @@ export class AcodeLanguageServerPlugin {
       replaceCompleters: true,
       codelens: true,
       breadcrumbs: true,
+      reconnectDelay: 1,
+      closeTimeout: 60 * 3,
+      breadcrumbTimeout: 1000,
       url: "ws://localhost:3030/"
     };
   }
@@ -1382,19 +1506,36 @@ export class AcodeLanguageServerPlugin {
     return {
       list: [
         {
+          key: "closeTimeout",
+          text: "Disconnect server timeout",
+          info: "Disconnect language server after how many seconds?",
+          value: this.getDefaultValue(this.settings.closeTimeout, 60 * 3),
+          prompt: "Disconnect Server Timeout",
+          promptType: "number"
+        },
+        {
+          key: "reconnectDelay",
+          text: "Server reconnect delay",
+          info: "Try to reconnect to the language server after how many seconds?",
+          value: this.getDefaultValue(this.settings.reconnectDelay, 1),
+          prompt: "Server Reconnect Delay",
+          promptType: "number"
+        },
+        {
+          key: "breadcrumbTimeout",
+          text: "Update breadcrumb timeout",
+          info: "Update breadcrumb navigation after how many seconds?",
+          value: this.getDefaultValue(this.settings.breadcrumbTimeout, 1000),
+          prompt: "Update Breadcrumb Timeout",
+          promptType: "number"
+        },
+        {
           key: "url",
           text: "Server Url",
           value: this.getDefaultValue(this.settings.url),
           prompt: "Server URL",
           promptType: "text"
         },
-        // {
-        //   key: "linter",
-        //   text: "Linter (Python)",
-        //   value: this.settings.linter,
-        //   info: "Linter to use with python type checking.",
-        //   select: LINTERS
-        // },
         {
           key: "hover",
           text: "Show Tooltip",
@@ -1438,28 +1579,7 @@ export class AcodeLanguageServerPlugin {
             if (!value.endsWith("/")) {
               value = value + "/";
             }
-          // case "linter":
-          //   this.$client.setGlobalOptions("python", {
-          //     pylsp: {
-          //       configurationSources: ["pycodestyle"],
-          //       plugins: {
-          //         pycodestyle: {
-          //           enabled: true,
-          //           ignore: ["E501"],
-          //           maxLineLength: 10
-          //         },
-          //         pyflakes: {
-          //           enabled: value === "pyflakes"
-          //         },
-          //         pylint: {
-          //           enabled: value === "pylint"
-          //         },
-          //         pyls_mypy: {
-          //           enabled: value === "mypy"
-          //         }
-          //       }
-          //     }
-          //   });
+            break;
           case "replaceCompleters":
             if (value) {
               this.$completers = editor.completers.splice(1, 2);
@@ -1468,6 +1588,7 @@ export class AcodeLanguageServerPlugin {
                 editor.completers = [...this.$completers, ...editor.completers];
               }
             }
+            break;
           default:
             acode.alert(
               "Acode Language Server",

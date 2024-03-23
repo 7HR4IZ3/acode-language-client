@@ -586,7 +586,7 @@ class SessionLanguageProvider {
 
   get fileName(): string {
     let name = getFolderName(this.session["id"]);
-    if (name) return name;
+    if (name) return "file://" + name;
     return this.session["id"] + "." + this.$extension;
   }
 
