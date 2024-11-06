@@ -564,6 +564,9 @@ export class AcodeLanguageServerPlugin {
 
   #setServerInfo({ name, version }) {
     let node = this.$footer.querySelector(".server-info");
+    if(name === "gopls"){
+      version = JSON.parse(version).GoVersion;
+    }
     node.innerHTML = `${name} (${version})`;
     node.style.display = "block";
   }

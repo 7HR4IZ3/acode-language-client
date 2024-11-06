@@ -1,0 +1,28 @@
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build Script
+        run: |
+          npm install node-polyfill-webpack-plugin
+          npm install
+          npm run build-release
+      - name: Buat Rilis Baru
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1
+          name: Acode Language Client
+          files: ./dist.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
