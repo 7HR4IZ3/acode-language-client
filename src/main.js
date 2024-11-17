@@ -518,7 +518,7 @@ export class AcodeLanguageServerPlugin {
           let percentage = detail.value.percentage;
           progress.setMessage(
             detail.value.message +
-              (percentage ? " <br/>(" + String(percentage) + "%)" : "")
+            (percentage ? " <br/>(" + String(percentage) + "%)" : "")
           );
         }
       }
@@ -564,8 +564,10 @@ export class AcodeLanguageServerPlugin {
 
   #setServerInfo({ name, version }) {
     let node = this.$footer.querySelector(".server-info");
-    if(name === "gopls"){
-      version = JSON.parse(version).GoVersion;
+    switch (name) {
+      case "gopls":
+        version = JSON.stringify(version).GoVersion
+        break
     }
     node.innerHTML = `${name} (${version})`;
     node.style.display = "block";
@@ -597,7 +599,7 @@ export class AcodeLanguageServerPlugin {
     }
   }
 
-  destroy() {}
+  destroy() { }
 
   async #openFile(uri, range) {
     let url = acode.require("url");
@@ -707,7 +709,7 @@ export class AcodeLanguageServerPlugin {
       if (
         !target.matches(
           ".breadcrumbs, .breadcrumb-dropdown, .breadcrumb-item *, " +
-            ".breadcrumb-name, .dropdown-item, .dropdown-name *"
+          ".breadcrumb-name, .dropdown-item, .dropdown-name *"
         )
       ) {
         if (this.$mainNode?.classList.contains("visible")) {

@@ -18,6 +18,7 @@
     "html-tag-js": "^1.1.22",
     "htmlhint": "^1.1.4",
     "luaparse": "latest",
+    "node-polyfill-webpack-plugin": "^4.0.0",
     "showdown": "latest",
     "ts-loader": "^9.5.1",
     "typescript": "^5.3.3",
