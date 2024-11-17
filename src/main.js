@@ -566,7 +566,7 @@ export class AcodeLanguageServerPlugin {
     let node = this.$footer.querySelector(".server-info");
     switch (name) {
       case "gopls":
-        version = JSON.stringify(version).GoVersion
+        version = JSON.parse(version).GoVersion;
         break
 
     }
