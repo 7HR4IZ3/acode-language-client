@@ -568,6 +568,7 @@ export class AcodeLanguageServerPlugin {
       case "gopls":
         version = JSON.stringify(version).GoVersion
         break
+
     }
     node.innerHTML = `${name} (${version})`;
     node.style.display = "block";
