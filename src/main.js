@@ -564,14 +564,12 @@ export class AcodeLanguageServerPlugin {
 
   #setServerInfo({ name, version }) {
     let node = this.$footer.querySelector(".server-info");
-
     switch (name) {
       case "gopls":
         version = JSON.parse(version).GoVersion;
         break
 
     }
-
     node.innerHTML = `${name} (${version})`;
     node.style.display = "block";
   }
