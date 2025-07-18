@@ -237,7 +237,7 @@ export class AcodeLanguageServerPlugin {
       className: "CssService",
       modes: "css",
       rootUri: () => this.#getRootUri(),
-      works6paceFolders: () => this.#getFolders()
+      workspaceFolders: () => this.#getFolders()
     });
 
     this.$manager.registerService("less", {
